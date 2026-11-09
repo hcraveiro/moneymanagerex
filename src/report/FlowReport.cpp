@@ -88,7 +88,7 @@ mmDate prior_nominal_due(Repeat& repeat, mmDate due)
             { current.year, current.month, 31 }, -months
         );
         const wxDateTime previous_date(
-            static_cast<wxDateTime_t>(previous.day),
+            previous.day,
             static_cast<wxDateTime::Month>(previous.month - 1),
             previous.year
         );
@@ -246,7 +246,7 @@ void FlowReport::getTransactions()
             if (sched_d.is_transfer() ||
                 !virtual_recurring::is_valid_frequency(nominal, frequency)) {
                 wxLogWarning("Skipping unsupported virtual schedule %lld",
-                    static_cast<long long>(sched_d.m_id.GetValue()));
+                    sched_d.m_id.GetValue());
                 continue;
             }
 
