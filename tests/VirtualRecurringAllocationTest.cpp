@@ -74,6 +74,15 @@ int main()
     };
     assert(sum(allocate(3000, 30, 20, calendar)) == 1000);
 
+    // A report ending midweek must never count future days outside its horizon.
+    const auto partial_window = allocate(3000, 30, 20, 24, weekly);
+    assert(partial_window.size() == 2);
+    assert(partial_window[0].day_offset == 22);
+    assert(partial_window[0].minor_units == 300);
+    assert(partial_window[1].day_offset == 24);
+    assert(partial_window[1].minor_units == 200);
+    assert(sum(partial_window) == 500);
+
     assert(allocate(1000, 30, 30, daily).empty());
     assert(allocate(1000, 0, 0, daily).empty());
 
