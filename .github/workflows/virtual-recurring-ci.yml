@@ -74,6 +74,11 @@ jobs:
       - name: Configure and package desktop application
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          if [ ! -f build/org.moneymanagerex.MMEX.metainfo.xml ]; then
+            echo "AppStream metadata not generated; using source template for development package"
+            cp resources/dist/linux/share/metainfo/org.moneymanagerex.MMEX.metainfo.xml.in \
+              build/org.moneymanagerex.MMEX.metainfo.xml
+          fi
           cmake --build build --target package --parallel 2
 
       - name: Upload Linux DEB
