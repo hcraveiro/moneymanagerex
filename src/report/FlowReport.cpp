@@ -303,7 +303,9 @@ void FlowReport::getTransactions()
                         case virtual_recurring::Period::Daily:
                             return day;
                         case virtual_recurring::Period::Weekly:
-                            return virtual_recurring::weekly_bucket_end(day, length);
+                            return virtual_recurring::rolling_weekly_bucket_end(
+                                day, first_future, length
+                            );
                         case virtual_recurring::Period::Monthly:
                         case virtual_recurring::Period::Quarterly:
                             return virtual_recurring::month_bucket_end(day, calendar_ends);
