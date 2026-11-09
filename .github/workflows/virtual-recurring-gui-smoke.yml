@@ -73,6 +73,9 @@ jobs:
             ${{ runner.temp }}/mmex-gui-smoke/mmex-virtual-edit-dialog.png
             ${{ runner.temp }}/mmex-gui-smoke/mmex-reports-navigation.png
             ${{ runner.temp }}/mmex-gui-smoke/mmex-cashflow-navigation.png
+            ${{ runner.temp }}/mmex-gui-smoke/mmex-cashflow-daily.png
+            ${{ runner.temp }}/mmex-gui-smoke/mmex-cashflow-monthly.png
+            ${{ runner.temp }}/mmex-gui-smoke/mmex-cashflow-transactions.png
             ${{ runner.temp }}/mmex-gui-smoke/mmex.log
             ${{ runner.temp }}/mmex-gui-smoke/windows.txt
             ${{ runner.temp }}/mmex-gui-smoke/window-summary.txt
