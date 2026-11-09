@@ -91,4 +91,49 @@ std::vector<Allocation> allocate(
     );
 }
 
+
+// Allocate one equal minor-unit share to each calendar bucket, rather than
+// weighting months or quarters by their unequal number of days. Within an
+// incomplete bucket, prorate only the future days against that bucket's
+// actual duration. Preserve signed cents exactly over the complete cycle.
+inline std::vector<Allocation> allocate_equal_calendar_buckets(
+    std::int64_t total_minor_units,
+    int cycle_days,
+    int first_future_day,
+    int last_future_day,
+    const std::vector<int>& bucket_ends
+)
+{
+    std::vector<Allocation> result;
+    if (cycle_days <= 0 || bucket_ends.empty()
+        || first_future_day >= cycle_days || last_future_day < 0)
+        return result;
+
+    const int first = std::max(0, first_future_day);
+    const int last = std::min(cycle_days - 1, last_future_day);
+    if (first > last || bucket_ends.back() != cycle_days - 1)
+        return result;
+
+    int bucket_start = 0;
+    const int bucket_count = static_cast<int>(bucket_ends.size());
+    for (int bucket = 0; bucket < bucket_count; ++bucket) {
+        const int bucket_end = bucket_ends[bucket];
+        if (bucket_end < bucket_start || bucket_end >= cycle_days)
+            throw std::invalid_argument("Invalid calendar bucket boundaries");
+        const int length = bucket_end - bucket_start + 1;
+        const auto share = amount_for_day(total_minor_units, bucket_count, bucket);
+        const int begin = std::max(bucket_start, first);
+        const int finish = std::min(bucket_end, last);
+        if (begin <= finish) {
+            std::int64_t remaining = 0;
+            for (int day = begin; day <= finish; ++day)
+                remaining += amount_for_day(share, length, day - bucket_start);
+            if (remaining != 0)
+                result.push_back({ std::min(bucket_end, last), remaining });
+        }
+        bucket_start = bucket_end + 1;
+    }
+    return result;
+}
+
 } // namespace virtual_recurring
