@@ -91,7 +91,12 @@ static void verify_case(const std::vector<std::string>& cols)
             return -1;
         }
     };
-    const auto result = allocate(amount, cycle_days, first, last, bucket_end);
+    const auto result =
+        (frequency == Period::Monthly || frequency == Period::Quarterly)
+        ? allocate_equal_calendar_buckets(
+            amount, cycle_days, first, last, calendar_ends
+        )
+        : allocate(amount, cycle_days, first, last, bucket_end);
     if (result.size() != expected.size()) {
         throw std::runtime_error(name + ": allocation count mismatch: got "
             + std::to_string(result.size()) + ", expected "
