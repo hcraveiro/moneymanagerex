@@ -22,7 +22,7 @@ int main()
     const auto ends = month_bucket_ends(start, due, Period::Monthly);
     assert(ends.size() == 3);
     assert(ends[0] == day_number({2026, 9, 30}) - day_number(start) - 1);
-    assert(ends[1] == day_number({2026, 10, 30}) - day_number(start) - 1);
+    assert(ends[1] == day_number({2026, 10, 31}) - day_number(start) - 1);
     assert(ends[2] == day_number(due) - day_number(start) - 1);
     assert(month_bucket_end(0, ends) == ends.front());
     assert(month_bucket_end(ends[0] + 1, ends) == ends[1]);
@@ -34,17 +34,36 @@ int main()
     assert(quarters[0] == day_number({2026, 2, 28}) - day_number(year_start) - 1);
     assert(quarters[3] == day_number(due) - day_number(year_start) - 1);
     const int year_days = day_number(due) - day_number(year_start);
-    const auto quarter_forecast = allocate(
-        12000, year_days, 0,
-        [&](int day, int) { return month_bucket_end(day, quarters); }
+    const auto quarter_forecast = allocate_equal_calendar_buckets(
+        12000, year_days, 0, year_days - 1, quarters
     );
     assert(quarter_forecast.size() == 4);
     std::int64_t sum = 0;
     for (const auto& entry : quarter_forecast) {
         sum += entry.minor_units;
-        assert(entry.minor_units > 0);
+        assert(entry.minor_units == 3000);
     }
     assert(sum == 12000);
+
+    // A yearly EUR 120 schedule must pay EUR 10 per calendar month, not
+    // EUR 9.xx or 10.xx depending on the number of days in each month.
+    const auto months = month_bucket_ends(year_start, due, Period::Monthly);
+    assert(months.size() == 12);
+    const auto annual = allocate_equal_calendar_buckets(
+        12000, year_days, 0, year_days - 1, months
+    );
+    assert(annual.size() == 12);
+    for (const auto& entry : annual)
+        assert(entry.minor_units == 1000);
+    assert(annual.back().day_offset == year_days - 1);
+
+    // On November 9, only November 10-30 remains: 21/30 of EUR 10.
+    const int november_nine = day_number({2026, 11, 9}) - day_number(year_start);
+    const auto partial = allocate_equal_calendar_buckets(
+        12000, year_days, november_nine, year_days - 1, months
+    );
+    assert(partial.size() == 1);
+    assert(partial[0].minor_units == 700);
 
     const auto leap_ends = month_bucket_ends(
         {2023, 12, 31}, {2024, 3, 31}, Period::Monthly
