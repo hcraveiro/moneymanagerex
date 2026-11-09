@@ -136,7 +136,19 @@ xdotool windowactivate --sync "$main_window"
 xdotool mousemove 111 171 click 1
 sleep 3
 scrot "$output_dir/mmex-scheduled-transactions.png"
-xdotool mousemove 66 327 click 1
+
+# Select synthetic Virtual schedule 920, then inspect its edit dialog.
+xdotool mousemove 287 172 click 1
+sleep 1
+scrot "$output_dir/mmex-virtual-selected.png"
+xdotool mousemove 335 796 click 1
+sleep 3
+scrot "$output_dir/mmex-virtual-edit-dialog.png"
+xdotool key --clearmodifiers Escape
+sleep 1
+
+# Expand the Reports tree using its disclosure triangle.
+xdotool mousemove 10 328 click 1
 sleep 2
 scrot "$output_dir/mmex-reports-navigation.png"
 
