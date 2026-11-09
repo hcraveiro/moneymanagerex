@@ -1,0 +1,78 @@
+name: Virtual Recurring - Desktop graphical acceptance
+
+on:
+  push:
+    branches:
+      - feature/virtual-recurring-transactions
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: virtual-gui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  packaged-gui-smoke:
+    name: Open packaged MMEX with synthetic v22 data under Xvfb
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout smoke-test script
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout isolated acceptance database generator
+        uses: actions/checkout@v4
+        with:
+          repository: hcraveiro/database
+          ref: c9e3bd5a7d4ef2e1417862e3ce6ca4dd27dc1c5a
+          path: acceptance-fixtures
+          persist-credentials: false
+
+      - name: Download previously verified packaged Linux MMEX
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p package
+          gh run download 42645006648 \
+            --repo hcraveiro/moneymanagerex \
+            --name mmex-virtual-linux-deb \
+            --dir package
+          find package -name '*.deb' -type f -print -quit | grep -q .
+
+      - name: Install packaged MMEX and graphical test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ./package/mmex_*.deb xvfb xdotool wmctrl scrot
+
+      - name: Launch graphical application with no user financial data
+        run: |
+          python3 acceptance-fixtures/tests/build_virtual_recurring_acceptance.py \
+            "${RUNNER_TEMP}/acceptance-v22.mmb"
+          xvfb-run -a -s "-screen 0 1440x900x24 -nolisten tcp" \
+            bash tests/virtual_recurring_gui_smoke.sh \
+            /usr/bin/mmex \
+            "${RUNNER_TEMP}/acceptance-v22.mmb" \
+            "${RUNNER_TEMP}/mmex-gui-smoke"
+
+      - name: Upload privacy-safe GUI evidence and diagnostic diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmex-virtual-desktop-gui-acceptance
+          path: |
+            ${{ runner.temp }}/mmex-gui-smoke/mmex-initial.png
+            ${{ runner.temp }}/mmex-gui-smoke/mmex-after-startup.png
+            ${{ runner.temp }}/mmex-gui-smoke/mmex.log
+            ${{ runner.temp }}/mmex-gui-smoke/windows.txt
+            ${{ runner.temp }}/mmex-gui-smoke/window-summary.txt
+            ${{ runner.temp }}/mmex-gui-smoke/ledger-before.json
+            ${{ runner.temp }}/mmex-gui-smoke/ledger-diff.json
+            ${{ runner.temp }}/mmex-gui-smoke/working-copy-v22.mmb
+          if-no-files-found: warn
+          retention-days: 14
