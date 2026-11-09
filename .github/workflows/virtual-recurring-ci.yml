@@ -65,6 +65,19 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
+      - name: Checkout pinned cross-client acceptance vectors
+        uses: actions/checkout@v4
+        with:
+          repository: hcraveiro/database
+          ref: f42a4fd45c78bcc2a9fd8ec9c134a101078b0758
+          path: acceptance-fixtures
+          persist-credentials: false
+
+      - name: Test shared Desktop-Android acceptance matrix (C++17)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringAcceptanceTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-acceptance-test"
+          "${RUNNER_TEMP}/virtual-recurring-acceptance-test" acceptance-fixtures/tests/virtual_recurring_acceptance.csv
+
       - name: Test virtual frequency constraints (C++17)
         run: |
           c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringRulesTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-rules-test"
