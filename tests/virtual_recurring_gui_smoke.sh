@@ -77,9 +77,29 @@ window_title="$(xdotool getwindowname "$found_window" 2>/dev/null || true)"
 printf 'MMEX window id: %s\nWindow title: %s\n' "$found_window" "$window_title" \
   | tee "$output_dir/window-summary.txt"
 
+# The first installation displays a privacy dialog. Explicitly opt out of
+# anonymous statistics before acknowledging the dialog in our test profile.
+if [[ "$window_title" == "License agreement" ]]; then
+  scrot "$output_dir/mmex-initial.png"
+  xdotool windowactivate --sync "$found_window" || true
+  xdotool mousemove --window "$found_window" 77 533 click 1
+  sleep 1
+  xdotool mousemove --window "$found_window" 205 573 click 1
+  sleep 5
+fi
+
 sleep 8
 wmctrl -lp > "$windows_file" || true
-scrot "$output_dir/mmex-initial.png"
+scrot "$output_dir/mmex-after-startup.png"
+for window in $(xdotool search --onlyvisible --pid "$app_pid" 2>/dev/null || true); do
+  printf 'Visible window: %s %s\n' "$window" \
+    "$(xdotool getwindowname "$window" 2>/dev/null || true)" \
+    >> "$output_dir/window-summary.txt"
+done
+if grep -q 'Visible window: .*License agreement' "$output_dir/window-summary.txt"; then
+  echo "MMEX is still showing the first-run privacy dialog." >&2
+  exit 1
+fi
 
 # A real application window must be visible, not merely a running process.
 if ! kill -0 "$app_pid" 2>/dev/null || [[ -z "$(xdotool search --onlyvisible --pid "$app_pid" 2>/dev/null || true)" ]]; then
@@ -107,6 +127,37 @@ with sqlite3.connect(sys.argv[1]) as connection:
         ).fetchall(),
     }
     assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
-assert actual == expected, "MMEX graphical startup changed financial records"
+if actual != expected:
+    changes = {}
+    for name, table, pk in (
+        ("posted", "CHECKINGACCOUNT_V1", "TRANSID"),
+        ("scheduled", "BILLSDEPOSITS_V1", "BDID"),
+    ):
+        if actual[name] == expected[name]:
+            continue
+        columns = [
+            record[1] for record in
+            connection.execute(f"PRAGMA table_info({table})")
+        ]
+        before = {row[0]: row for row in expected[name]}
+        after = {row[0]: row for row in actual[name]}
+        rows = {}
+        for row_id in sorted(set(before) | set(after)):
+            previous = before.get(row_id)
+            current = after.get(row_id)
+            if previous == current:
+                continue
+            rows[str(row_id)] = {
+                column: {"before": (previous or [None] * len(columns))[index],
+                         "after": (current or [None] * len(columns))[index]}
+                for index, column in enumerate(columns)
+                if previous is None or current is None
+                or previous[index] != current[index]
+            }
+        changes[name] = rows
+    diff_path = str(sys.argv[2]).replace("ledger-before.json", "ledger-diff.json")
+    with open(diff_path, "w", encoding="utf-8") as output:
+        json.dump(changes, output, indent=2, ensure_ascii=False)
+    raise AssertionError(f"MMEX changed financial records: {changes}")
 print("MMEX graphical launch preserved all posted and scheduled transactions")
 PY
