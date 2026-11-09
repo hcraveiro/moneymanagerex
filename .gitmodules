@@ -9,7 +9,7 @@
 	url = https://github.com/FVANCOP/ChartNew.js
 [submodule "database"]
 	path = database
-	url = https://github.com/moneymanagerex/database
+	url = https://github.com/hcraveiro/database.git
 [submodule "3rd/rapidjson"]
 	path = 3rd/rapidjson
 	url = https://github.com/Tencent/rapidjson
