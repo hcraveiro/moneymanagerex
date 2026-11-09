@@ -1,0 +1,107 @@
+name: Virtual Recurring - Desktop CI
+
+on:
+  push:
+    branches:
+      - feature/virtual-recurring-transactions
+    tags:
+      - 'virtual-v*'
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: virtual-desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-build:
+    name: Linux DEB (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential libssl-dev gettext git pkg-config \
+            lsb-release file ccache libgtk-3-dev liblua5.3-dev \
+            libcurl4-openssl-dev libwebkit2gtk-4.1-dev wget appstream fuse
+
+      - name: Cache wxWidgets 3.3.4 build
+        id: wx-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/wxWidgets
+          key: wxwidgets-3.3.4-ubuntu-24.04-mmex-v1
+
+      - name: Build wxWidgets 3.3.4
+        if: steps.wx-cache.outputs.cache-hit != 'true'
+        run: |
+          cd "${RUNNER_TEMP}"
+          wget -q "https://github.com/wxWidgets/wxWidgets/releases/download/v3.3.4/wxWidgets-3.3.4.tar.bz2"
+          tar -xjf wxWidgets-3.3.4.tar.bz2
+          mv wxWidgets-3.3.4 wxWidgets
+          cd wxWidgets
+          mkdir -p build-linux
+          cd build-linux
+          ../configure --enable-std_containers --disable-shared \
+            --with-cxx=17 --enable-webview --with-gtk=3 --enable-intl
+          make -j2
+
+      - name: Install wxWidgets
+        run: |
+          cd "${RUNNER_TEMP}/wxWidgets/build-linux"
+          sudo make install
+          sudo ldconfig
+
+      - name: Checkout source and pinned database submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Verify virtual recurrence database schema
+        run: |
+          test -f database/incremental_upgrade/database_version_22.sql
+          grep -q "dbLatestVersion = 22;" src/table/_TableUpgrade.h
+          grep -q "VIRTUALFREQUENCY" src/table/SchedTable.cpp
+
+      - name: Configure and package desktop application
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target package --parallel 2
+
+      - name: Upload Linux DEB
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmex-virtual-linux-deb
+          path: build/mmex*.deb
+          if-no-files-found: error
+          retention-days: 14
+
+  prerelease:
+    name: Create GitHub prerelease (tag only)
+    needs: linux-build
+    if: startsWith(github.ref, 'refs/tags/virtual-v') && github.repository == 'hcraveiro/moneymanagerex'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: mmex-virtual-linux-deb
+          path: dist
+
+      - name: Publish opt-in prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          generate_release_notes: true
+          files: dist/*.deb
+          fail_on_unmatched_files: true
