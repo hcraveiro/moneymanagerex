@@ -159,12 +159,25 @@ scrot "$output_dir/mmex-cashflow-navigation.png"
 xdotool mousemove 85 379 click 1
 sleep 6
 scrot "$output_dir/mmex-cashflow-daily.png"
+# Hide the graph so the dated rows and monetary totals are visible.
+xdotool mousemove 855 105 click 1
+xdotool key --clearmodifiers End Return
+sleep 3
+scrot "$output_dir/mmex-cashflow-daily-table.png"
 xdotool mousemove 85 405 click 1
 sleep 6
 scrot "$output_dir/mmex-cashflow-monthly.png"
+xdotool mousemove 855 105 click 1
+xdotool key --clearmodifiers End Return
+sleep 3
+scrot "$output_dir/mmex-cashflow-monthly-table.png"
 xdotool mousemove 102 431 click 1
 sleep 6
 scrot "$output_dir/mmex-cashflow-transactions.png"
+xdotool mousemove 855 105 click 1
+xdotool key --clearmodifiers End Return
+sleep 3
+scrot "$output_dir/mmex-cashflow-transactions-table.png"
 
 cleanup
 trap - EXIT
