@@ -195,7 +195,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}\curl-install
-          key: curl-8.5.0-msvc143-x64-schannel-v1
+          key: curl-8.5.0-msvc143-x64-schannel-shared-v2
 
       - name: Build libcurl with Windows Schannel
         if: steps.curl-cache.outputs.cache-hit != 'true'
@@ -205,7 +205,7 @@ jobs:
           $build = Join-Path $env:RUNNER_TEMP "curl-build"
           & git clone --quiet --depth 1 --branch "curl-8_5_0" --single-branch "https://github.com/curl/curl.git" $source
           if ($LASTEXITCODE -ne 0) { throw "libcurl download failed" }
-          & cmake -S $source -B $build -G "Visual Studio 17 2022" -A x64 -T "v143,host=x64" -DBUILD_CURL_EXE=OFF -DHTTP_ONLY=ON -DCURL_USE_SCHANNEL=ON -DBUILD_TESTING=OFF "-DCMAKE_INSTALL_PREFIX=$env:CURL_ROOT"
+          & cmake -S $source -B $build -G "Visual Studio 17 2022" -A x64 -T "v143,host=x64" -DBUILD_CURL_EXE=OFF -DBUILD_SHARED_LIBS=ON -DBUILD_STATIC_LIBS=OFF -DHTTP_ONLY=ON -DCURL_USE_SCHANNEL=ON -DBUILD_TESTING=OFF "-DCMAKE_INSTALL_PREFIX=$env:CURL_ROOT"
           if ($LASTEXITCODE -ne 0) { throw "libcurl configuration failed" }
           & cmake --build $build --target install --config Release --parallel 2
           if ($LASTEXITCODE -ne 0) { throw "libcurl compilation failed" }
@@ -216,6 +216,18 @@ jobs:
           if (!(Test-Path "database/incremental_upgrade/database_version_22.sql")) { throw "Database v22 migration is missing" }
           if (!(Test-Path "$env:WX_ROOT\lib\vc_x64_dll")) { throw "wxWidgets MSVC DLL libraries were not generated" }
           if (!(Test-Path "$env:CURL_ROOT\include\curl\curl.h")) { throw "libcurl development headers are missing" }
+          $curlDll = Get-ChildItem -Path $env:CURL_ROOT -Filter libcurl.dll -File -Recurse |
+            Select-Object -First 1
+          if (-not $curlDll) {
+            throw "The libcurl Windows build did not install libcurl.dll; cannot ship a working MMEX executable"
+          }
+          $runtimeDir = Join-Path $env:CURL_ROOT "bin"
+          $runtimeDll = Join-Path $runtimeDir "libcurl.dll"
+          New-Item -Path $runtimeDir -ItemType Directory -Force | Out-Null
+          if ($curlDll.FullName -ne $runtimeDll) {
+            Copy-Item -LiteralPath $curlDll.FullName -Destination $runtimeDll -Force
+          }
+          Write-Host "Verified Windows libcurl runtime: $runtimeDll"
 
       - name: Configure and compile MMEX for Windows x64
         shell: pwsh
@@ -238,7 +250,108 @@ jobs:
           & cpack -G ZIP -C Release --config build-win/CPackConfig.cmake -B build-win
           if ($LASTEXITCODE -ne 0) { throw "Windows portable packaging failed" }
           if (-not (Get-ChildItem build-win -Filter "*.exe" -File)) { throw "Windows installer output is missing" }
-          if (-not (Get-ChildItem build-win -Filter "*.zip" -File)) { throw "Windows portable ZIP output is missing" }
+          $archives = @(Get-ChildItem build-win -Filter "*.zip" -File)
+          if ($archives.Count -eq 0) { throw "Windows portable ZIP output is missing" }
+          Add-Type -AssemblyName System.IO.Compression
+          foreach ($archive in $archives) {
+            $zip = [System.IO.Compression.ZipFile]::OpenRead($archive.FullName)
+            try {
+              $runtimeDll = @($zip.Entries | Where-Object {
+                $_.FullName -match '(^|/)bin/libcurl[.]dll
+      - name: Upload Windows x64 installer and portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmex-virtual-windows-x64
+          path: |
+            build-win/*.exe
+            build-win/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  prerelease:
+    name: Create GitHub prerelease (tag only)
+    needs: [linux-build, windows-build]
+    if: startsWith(github.ref, 'refs/tags/virtual-v') && github.repository == 'hcraveiro/moneymanagerex'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: mmex-virtual-linux-deb
+          path: dist/linux
+
+      - name: Download verified Windows x64 build
+        uses: actions/download-artifact@v4
+        with:
+          name: mmex-virtual-windows-x64
+          path: dist/windows
+
+      - name: Publish opt-in prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            dist/linux/*.deb
+            dist/windows/*.exe
+            dist/windows/*.zip
+          fail_on_unmatched_files: true
+
+              })
+              $executable = @($zip.Entries | Where-Object {
+                $_.FullName -match '(^|/)bin/mmex[.]exe
+      - name: Upload Windows x64 installer and portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmex-virtual-windows-x64
+          path: |
+            build-win/*.exe
+            build-win/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  prerelease:
+    name: Create GitHub prerelease (tag only)
+    needs: [linux-build, windows-build]
+    if: startsWith(github.ref, 'refs/tags/virtual-v') && github.repository == 'hcraveiro/moneymanagerex'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: mmex-virtual-linux-deb
+          path: dist/linux
+
+      - name: Download verified Windows x64 build
+        uses: actions/download-artifact@v4
+        with:
+          name: mmex-virtual-windows-x64
+          path: dist/windows
+
+      - name: Publish opt-in prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            dist/linux/*.deb
+            dist/windows/*.exe
+            dist/windows/*.zip
+          fail_on_unmatched_files: true
+
+              })
+              if ($runtimeDll.Count -ne 1 -or $executable.Count -ne 1) {
+                throw "Portable archive $($archive.Name) is incomplete: mmex.exe or libcurl.dll missing"
+              }
+              Write-Host "Validated portable package: $($archive.Name), libcurl.dll $($runtimeDll[0].Length) bytes"
+            } finally {
+              $zip.Dispose()
+            }
+          }
 
       - name: Upload Windows x64 installer and portable ZIP
         uses: actions/upload-artifact@v4
