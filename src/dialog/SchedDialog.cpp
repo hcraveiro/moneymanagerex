@@ -1515,7 +1515,6 @@ void SchedDialog::onOk(wxCommandEvent& WXUNUSED(event))
 
     m_sched_d.m_due_date = mmDate(w_due_date->GetValue());
     m_sched_d.m_datetime = mmDateTime(w_pay_date->GetValue());
-    m_sched_d.m_is_virtual = enable_virtual;
     if (enable_virtual) {
         m_sched_d.m_virtual_frequency = virtual_frequency_key;
     }
@@ -1553,6 +1552,8 @@ void SchedDialog::onOk(wxCommandEvent& WXUNUSED(event))
         m_sched_d.m_due_date = next_due;
         m_sched_d.m_datetime = mmDateTime(next_paid, payment_time);
     }
+    // Only update the stored Virtual state once all transition checks pass.
+    m_sched_d.m_is_virtual = enable_virtual;
 
     wxStringClientData* status_obj = static_cast<wxStringClientData *>(
         w_status_choice->GetClientObject(w_status_choice->GetSelection())
