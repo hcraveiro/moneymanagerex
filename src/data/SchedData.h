@@ -43,6 +43,8 @@ struct SchedData
     wxString   m_notes;
     int64      m_followup_id;
     int64      m_color;
+    bool       m_is_virtual;
+    wxString   m_virtual_frequency;
     mmDate     m_due_date;
     Repeat     m_repeat;          // decoding of REEPATS, NUMOCCURRENCES
 
@@ -74,6 +76,7 @@ struct SchedData
     auto m_isoTime() const -> const wxString { return m_datetime.isoTime(); }
     auto m_isoDateTime() const -> const wxString { return m_datetime.isoDateTime(); }
 
+    bool is_virtual()    const { return m_is_virtual; }
     bool is_withdrawal() const { return m_type.id() == TrxType::e_withdrawal; }
     bool is_deposit()    const { return m_type.id() == TrxType::e_deposit; }
     bool is_transfer()   const { return m_type.id() == TrxType::e_transfer; }
