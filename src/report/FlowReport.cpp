@@ -323,7 +323,7 @@ void FlowReport::getTransactions()
                             trx_d.m_datetime = mmDateTime(mmDate(date));
                             trx_d.m_type = sched_d.m_type;
                             trx_d.m_account_id = sched_d.m_account_id;
-                            trx_d.m_to_account_id_n = sched_d.m_to_account_id_n;
+                            trx_d.m_to_account_id_n = sched_d.is_transfer() ? sched_d.m_to_account_id_n : -1;
                             trx_d.m_payee_id_n = sched_d.m_payee_id_n;
                             trx_d.m_category_id_n = category_id;
                             trx_d.m_amount = static_cast<double>(item.minor_units) / scale;
@@ -359,7 +359,7 @@ void FlowReport::getTransactions()
             trx_d.m_datetime        = mmDateTime(next_date);
             trx_d.m_type            = sched_d.m_type;
             trx_d.m_account_id      = sched_d.m_account_id;
-            trx_d.m_to_account_id_n = sched_d.m_to_account_id_n;
+            trx_d.m_to_account_id_n = sched_d.is_transfer() ? sched_d.m_to_account_id_n : -1;
             trx_d.m_payee_id_n      = sched_d.m_payee_id_n;
             trx_d.m_amount          = sched_d.m_amount;
             trx_d.m_to_amount       = sched_d.m_to_amount;
