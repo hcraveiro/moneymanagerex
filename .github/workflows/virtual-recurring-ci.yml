@@ -75,6 +75,11 @@ jobs:
           c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringAllocationTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-allocation-test"
           "${RUNNER_TEMP}/virtual-recurring-allocation-test"
 
+      - name: Test calendar-anchored virtual frequencies (C++17)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringCalendarTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-calendar-test"
+          "${RUNNER_TEMP}/virtual-recurring-calendar-test"
+
       - name: Verify virtual recurrence database schema
         run: |
           test -f database/incremental_upgrade/database_version_22.sql
