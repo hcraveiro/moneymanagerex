@@ -63,8 +63,17 @@ inline std::vector<int> month_bucket_ends(
         return ends;
 
     const int step = frequency == Period::Monthly ? 1 : 3;
+    // If the nominal due date is month-end, virtual month boundaries are
+    // calendar month-ends too: Nov 30 -> Oct 31 -> Sep 30, rather than
+    // Nov 30 -> Oct 30. Each bucket then covers one full calendar month.
+    const bool last_day = current_due.day == days_in_month(
+        current_due.year, current_due.month
+    );
+    const CivilDate anchor = last_day
+        ? CivilDate{ current_due.year, current_due.month, 31 }
+        : current_due;
     for (int months = 0; months <= 15; months += step) {
-        const int candidate = day_number(shift_months_clamped(current_due, -months));
+        const int candidate = day_number(shift_months_clamped(anchor, -months));
         if (candidate < first_day)
             break;
         ends.push_back(candidate - first_day);
