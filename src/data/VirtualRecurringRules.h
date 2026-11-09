@@ -25,7 +25,7 @@ constexpr Period from_key(std::string_view key)
         : Period::Unsupported;
 }
 
-constexpr std::string_view to_key(Period period)
+constexpr const char* to_key(Period period)
 {
     return period == Period::Daily ? "Daily"
         : period == Period::Weekly ? "Weekly"
