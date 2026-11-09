@@ -323,7 +323,7 @@ void FlowReport::getTransactions()
                             trx_d.m_datetime = mmDateTime(mmDate(date));
                             trx_d.m_type = sched_d.m_type;
                             trx_d.m_account_id = sched_d.m_account_id;
-                            trx_d.m_to_account_id_n = sched_d.is_transfer() ? sched_d.m_to_account_id_n : -1;
+                            trx_d.m_to_account_id_n = sched_d.m_to_account_id_n;
                             trx_d.m_payee_id_n = sched_d.m_payee_id_n;
                             trx_d.m_category_id_n = category_id;
                             trx_d.m_amount = static_cast<double>(item.minor_units) / scale;
@@ -359,7 +359,7 @@ void FlowReport::getTransactions()
             trx_d.m_datetime        = mmDateTime(next_date);
             trx_d.m_type            = sched_d.m_type;
             trx_d.m_account_id      = sched_d.m_account_id;
-            trx_d.m_to_account_id_n = sched_d.is_transfer() ? sched_d.m_to_account_id_n : -1;
+            trx_d.m_to_account_id_n = sched_d.m_to_account_id_n;
             trx_d.m_payee_id_n      = sched_d.m_payee_id_n;
             trx_d.m_amount          = sched_d.m_amount;
             trx_d.m_to_amount       = sched_d.m_to_amount;
@@ -629,7 +629,9 @@ wxString mmReportCashFlowTransactions::getHTMLText()
         hb.addTableCellDate(trx_d.m_isoDateTime());
         hb.addTableCell(forecast.is_virtual ? _t("Virtual") : "");
         hb.addTableCell(AccountModel::instance().get_id_name(trx_d.m_account_id));
-        hb.addTableCell((trx_d.m_to_account_id_n == -1)
+        // TOACCOUNTID can be NULL for deposits and withdrawals.
+        // Show a destination account only for actual transfers.
+        hb.addTableCell((trx_d.m_type.id() != TrxType::e_transfer)
             ? PayeeModel::instance().get_id_name(trx_d.m_payee_id_n)
             : "> " + AccountModel::instance().get_id_name(trx_d.m_to_account_id_n)
         );
