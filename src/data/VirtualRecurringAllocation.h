@@ -43,6 +43,18 @@ constexpr int weekly_bucket_end(int day_offset, int cycle_days)
     return cycle_days - 1 - (cycle_days - 1 - day_offset) / 7 * 7;
 }
 
+// Weekly forecast buckets start with the first forecastable day, not the
+// end of the nominal recurrence. Today November 9 => Nov 16, 23, 30;
+// today November 8 => Nov 15, 22, 29, then Nov 30 for the last day.
+constexpr int rolling_weekly_bucket_end(
+    int day_offset, int first_future_day, int cycle_days
+)
+{
+    const int start = std::max(0, first_future_day);
+    return std::min(cycle_days - 1,
+        start + ((day_offset - start) / 7 + 1) * 7 - 1);
+}
+
 // bucket_end determines where each future day's allocation appears in the
 // report. For daily forecasts use day_offset, for weekly use weekly_bucket_end,
 // and for calendar months/quarters the caller supplies calendar-aware ends.
