@@ -157,7 +157,7 @@ bool SchedModel::is_data_allowed(const Data& sched_d)
 void SchedModel::reschedule_id(int64 sched_id)
 {
     Data* sched_n = unsafe_get_idN_data_n(sched_id);
-    if (!sched_n)
+    if (!sched_n || sched_n->is_virtual())
         return;
 
     // last repetition

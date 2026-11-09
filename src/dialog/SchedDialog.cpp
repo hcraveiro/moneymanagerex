@@ -27,6 +27,7 @@
 #include <wx/valnum.h>
 
 #include "data/VirtualRecurringRules.h"
+#include "data/VirtualRecurringAdvance.h"
 #include "base/_constants.h"
 #include "base/mmDate.h"
 #include "util/mmPath.h"
@@ -1348,6 +1349,7 @@ void SchedDialog::onOk(wxCommandEvent& WXUNUSED(event))
         return;
     }
 
+    const bool was_virtual = m_sched_d.is_virtual();
     const bool enable_virtual = w_virtual_cb->IsChecked();
     const wxString virtual_frequency_key = getVirtualFrequencyKey();
     if (enable_virtual && (m_is_transfer ||
@@ -1514,8 +1516,43 @@ void SchedDialog::onOk(wxCommandEvent& WXUNUSED(event))
     m_sched_d.m_due_date = mmDate(w_due_date->GetValue());
     m_sched_d.m_datetime = mmDateTime(w_pay_date->GetValue());
     m_sched_d.m_is_virtual = enable_virtual;
-    if (enable_virtual)
+    if (enable_virtual) {
         m_sched_d.m_virtual_frequency = virtual_frequency_key;
+    }
+    else if (was_virtual) {
+        // Disable Virtual without executing any missed nominal payments.
+        // Keep the stored frequency as requested, and leave automation off.
+        Repeat remaining = m_sched_d.m_repeat;
+        mmDate next_due = m_sched_d.m_due_date;
+        const auto skipped = virtual_recurring::skip_elapsed(
+            next_due, remaining, mmDate::today(),
+            [](Repeat& r, mmDate due) { return r.next_date(due); }
+        );
+        if (skipped.status != virtual_recurring::SkipStatus::Ready) {
+            wxMessageBox(
+                _t("No valid future payment remains. Change Payments Left or the due date before disabling Virtual."),
+                _t("Cannot disable Virtual"), wxOK | wxICON_WARNING, this
+            );
+            return;
+        }
+
+        mmDate next_paid = m_sched_d.m_date();
+        for (int i = 0; i < skipped.skipped; ++i) {
+            mmDate advanced = m_sched_d.m_repeat.next_date(next_paid);
+            if (!(advanced > next_paid)) {
+                wxMessageBox(
+                    _t("Unable to advance the payment date."),
+                    _t("Invalid scheduled date"), wxOK | wxICON_ERROR, this
+                );
+                return;
+            }
+            next_paid = advanced;
+        }
+        const wxString payment_time = m_sched_d.m_isoTime();
+        m_sched_d.m_repeat = remaining;
+        m_sched_d.m_due_date = next_due;
+        m_sched_d.m_datetime = mmDateTime(next_paid, payment_time);
+    }
 
     wxStringClientData* status_obj = static_cast<wxStringClientData *>(
         w_status_choice->GetClientObject(w_status_choice->GetSelection())

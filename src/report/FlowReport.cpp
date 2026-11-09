@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "base/_defs.h"
 #include "util/_util.h"
+#include "data/VirtualRecurringAdvance.h"
 #include "data/VirtualRecurringAllocation.h"
 #include "data/VirtualRecurringCalendar.h"
 #include "model/AccountModel.h"
@@ -269,18 +270,14 @@ void FlowReport::getTransactions()
 
             // Work on a local Repeat copy. Catching up past due dates must never
             // mutate Next Occurrence or Payments Left in the database.
-            for (int cycle = 0; cycle < 10000 && repeat.m_num != 0; ++cycle) {
-                if (date_number(next_date) <= today_day) {
-                    if (repeat.m_num == 1)
-                        break;
-                    mmDate advanced = repeat.next_date(next_date);
-                    if (!(advanced > next_date))
-                        break;
-                    next_date = advanced;
-                    repeat.next_repeat();
-                    continue;
-                }
+            const auto skipped = virtual_recurring::skip_elapsed(
+                next_date, repeat, mmDate(m_today),
+                [](Repeat& r, mmDate due) { return r.next_date(due); }
+            );
+            if (skipped.status != virtual_recurring::SkipStatus::Ready)
+                continue;
 
+            for (int cycle = 0; cycle < 10000 && repeat.m_num != 0; ++cycle) {
                 mmDate previous_due = prior_nominal_due(repeat, next_date);
                 const int start_day = date_number(previous_due);
                 const int end_day = date_number(next_date);
