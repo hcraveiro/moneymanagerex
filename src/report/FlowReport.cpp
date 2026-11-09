@@ -265,6 +265,8 @@ void FlowReport::getTransactions()
             const std::int64_t scale = currency->m_scale.GetValue();
 
             const int today_day = date_number(mmDate(m_today));
+            const int activation_day = sched_d.m_virtual_start_date.empty()
+                ? today_day : date_number(mmDate(sched_d.m_virtual_start_date));
             const int horizon_day = date_number(mmDate(endDate));
             const auto splits = SchedModel::instance().find_id_qp_a(sched_d.m_id);
 
@@ -285,7 +287,9 @@ void FlowReport::getTransactions()
                 if (cycle_days <= 0 || start_day >= horizon_day)
                     break;
 
-                const int first_future = std::max(0, today_day - start_day);
+                const int first_future = virtual_recurring::first_forecast_day(
+                    start_day, today_day, activation_day
+                );
                 const int last_future = std::min(
                     cycle_days - 1, horizon_day - start_day - 1
                 );

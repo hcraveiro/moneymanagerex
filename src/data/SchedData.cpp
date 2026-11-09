@@ -33,6 +33,7 @@ SchedData::SchedData() :
     m_color(-1),
     m_is_virtual(false),
     m_virtual_frequency(),
+    m_virtual_start_date(),
     m_due_date(mmDate::invalid()),
     m_repeat(Repeat())
 {
@@ -60,6 +61,7 @@ SchedRow SchedData::to_row() const
     row.COLOR              = m_color;
     row.ISVIRTUAL          = m_is_virtual ? 1 : 0;
     row.VIRTUALFREQUENCY   = m_virtual_frequency;
+    row.VIRTUALSTARTDATE   = m_virtual_start_date;
 
     // encode m_repeat to row.REPEATS, row.NUMOCCURRENCES
     m_repeat.to_row(row.REPEATS, row.NUMOCCURRENCES);
@@ -86,6 +88,7 @@ SchedData& SchedData::from_row(const SchedRow& row)
     m_color           = row.COLOR;
     m_is_virtual      = row.ISVIRTUAL != 0;
     m_virtual_frequency = row.VIRTUALFREQUENCY;
+    m_virtual_start_date = row.VIRTUALSTARTDATE;
     m_due_date        = mmDate(row.NEXTOCCURRENCEDATE);
 
     // decode row.REPEATS, row.NUMOCCURRENCES to m_repeat
@@ -112,6 +115,7 @@ bool SchedData::equals(const SchedData* other) const
     if ( m_color              != other->m_color)              return false;
     if ( m_is_virtual         != other->m_is_virtual)         return false;
     if (!m_virtual_frequency.IsSameAs(other->m_virtual_frequency)) return false;
+    if (!m_virtual_start_date.IsSameAs(other->m_virtual_start_date)) return false;
     if ( m_due_date           != other->m_due_date)           return false;
     if ( m_repeat.m_mode.id() != other->m_repeat.m_mode.id()) return false;
     if ( m_repeat.m_freq.id() != other->m_repeat.m_freq.id()) return false;

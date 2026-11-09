@@ -45,6 +45,7 @@ struct SchedData
     int64      m_color;
     bool       m_is_virtual;
     wxString   m_virtual_frequency;
+    wxString   m_virtual_start_date; // ISO local date when virtual mode was enabled.
     mmDate     m_due_date;
     Repeat     m_repeat;          // decoding of REEPATS, NUMOCCURRENCES
 

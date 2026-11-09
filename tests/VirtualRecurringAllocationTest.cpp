@@ -7,6 +7,7 @@
 
 using virtual_recurring::Allocation;
 using virtual_recurring::allocate;
+using virtual_recurring::first_forecast_day;
 using virtual_recurring::amount_for_day;
 using virtual_recurring::weekly_bucket_end;
 
@@ -15,6 +16,10 @@ static_assert(amount_for_day(3000, 30, 29) == 100);
 static_assert(weekly_bucket_end(0, 30) == 1);
 static_assert(weekly_bucket_end(20, 30) == 22);
 static_assert(weekly_bucket_end(23, 30) == 29);
+static_assert(first_forecast_day(0, 20, 10) == 20);
+static_assert(first_forecast_day(0, 20, 25) == 25);
+static_assert(first_forecast_day(0, 20, 20) == 20);
+static_assert(first_forecast_day(25, 20, 10) == 0);
 
 std::int64_t sum(const std::vector<Allocation>& entries)
 {
@@ -50,6 +55,17 @@ int main()
     assert(remaining_weekly[1].day_offset == 29);
     assert(remaining_weekly[1].minor_units == 700);
     assert(sum(remaining_weekly) == 1000);
+
+    // Activated on November 25: only November 26-30 must be forecast.
+    const int activated_mid_cycle = first_forecast_day(0, 20, 25);
+    const auto activated_daily = allocate(3000, 30, activated_mid_cycle, daily);
+    assert(activated_daily.size() == 5);
+    assert(sum(activated_daily) == 500);
+
+    // Updating the amount uses the same activation cut-off and changes only
+    // the remaining future portion, without restarting the cycle.
+    const auto amount_updated = allocate(6000, 30, activated_mid_cycle, daily);
+    assert(sum(amount_updated) == 1000);
 
     const auto remaining_daily = allocate(3000, 30, 20, daily);
     assert(remaining_daily.size() == 10);

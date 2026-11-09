@@ -1582,7 +1582,12 @@ void SchedDialog::onOk(wxCommandEvent& WXUNUSED(event))
             _t("Invalid Date")
         );
 
-    // Commit the virtual flag only after all other validation has completed.
+    // Commit virtual settings only after the rest of validation has completed.
+    // Edits to amount/frequency must not reset the activation date.
+    if (enable_virtual && (!was_virtual || m_sched_d.m_virtual_start_date.empty()))
+        m_sched_d.m_virtual_start_date = mmDate::today().isoDate();
+    else if (!enable_virtual)
+        m_sched_d.m_virtual_start_date.clear();
     m_sched_d.m_is_virtual = enable_virtual;
     if (!is_enter()) {
         SchedData sched_d = m_sched_d;

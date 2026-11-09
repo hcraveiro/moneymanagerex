@@ -90,6 +90,8 @@ jobs:
           test -f database/incremental_upgrade/database_version_22.sql
           grep -q "dbLatestVersion = 22;" src/table/_TableUpgrade.h
           grep -q "VIRTUALFREQUENCY" src/table/SchedTable.cpp
+          grep -q "VIRTUALSTARTDATE" database/incremental_upgrade/database_version_22.sql
+          grep -q "VIRTUALSTARTDATE" src/table/SchedTable.cpp
 
       - name: Configure and package desktop application
         run: |

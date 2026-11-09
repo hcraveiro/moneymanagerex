@@ -15,6 +15,13 @@ struct Allocation
     std::int64_t minor_units;    // Signed amount in the account currency's minor units.
 };
 
+// A forecast starts on the later of the day after today and the day after
+// activation. Indices are relative to the previous nominal due date.
+constexpr int first_forecast_day(int previous_due_day, int today_day, int activation_day)
+{
+    return std::max(0, std::max(today_day, activation_day) - previous_due_day);
+}
+
 // Distribute all remainder units across the period instead of using a
 // large correction at its end. Integer division truncates toward zero,
 // preserving the same behavior for withdrawals and deposits.

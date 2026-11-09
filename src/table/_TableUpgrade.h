@@ -454,6 +454,8 @@ const std::vector<wxString> dbUpgradeQuery =
         -- Existing schedules remain non-virtual after upgrade.
         ALTER TABLE BILLSDEPOSITS_V1 ADD COLUMN ISVIRTUAL INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE BILLSDEPOSITS_V1 ADD COLUMN VIRTUALFREQUENCY TEXT DEFAULT NULL;
+        -- Local activation date of forecast-only scheduling.
+        ALTER TABLE BILLSDEPOSITS_V1 ADD COLUMN VIRTUALSTARTDATE TEXT DEFAULT NULL;
     )",
 
 };

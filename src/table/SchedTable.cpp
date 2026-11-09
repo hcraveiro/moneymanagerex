@@ -46,7 +46,8 @@ const wxArrayString SchedCol::s_col_name_a = {
     "NUMOCCURRENCES",
     "COLOR",
     "ISVIRTUAL",
-    "VIRTUALFREQUENCY"
+    "VIRTUALFREQUENCY",
+    "VIRTUALSTARTDATE"
 };
 
 const SchedCol::COL_ID SchedCol::s_primary_id = COL_ID_BDID;
@@ -72,6 +73,7 @@ const wxString SchedCol::NAME_NUMOCCURRENCES = s_col_name_a[COL_ID_NUMOCCURRENCE
 const wxString SchedCol::NAME_COLOR = s_col_name_a[COL_ID_COLOR];
 const wxString SchedCol::NAME_ISVIRTUAL = s_col_name_a[COL_ID_ISVIRTUAL];
 const wxString SchedCol::NAME_VIRTUALFREQUENCY = s_col_name_a[COL_ID_VIRTUALFREQUENCY];
+const wxString SchedCol::NAME_VIRTUALSTARTDATE = s_col_name_a[COL_ID_VIRTUALSTARTDATE];
 
 SchedRow::SchedRow()
 {
@@ -113,7 +115,11 @@ void SchedRow::to_insert_stmt(wxSQLite3Statement& stmt, int64 id) const
         stmt.BindNull(18);
     else
         stmt.Bind(18, VIRTUALFREQUENCY);
-    stmt.Bind(19, id);
+    if (VIRTUALSTARTDATE.empty())
+        stmt.BindNull(19);
+    else
+        stmt.Bind(19, VIRTUALSTARTDATE);
+    stmt.Bind(20, id);
 }
 
 SchedRow& SchedRow::from_select_result(wxSQLite3ResultSet& q)
@@ -137,6 +143,7 @@ SchedRow& SchedRow::from_select_result(wxSQLite3ResultSet& q)
     COLOR = q.GetInt64(16);
     ISVIRTUAL = q.GetInt64(17);
     VIRTUALFREQUENCY = q.GetString(18);
+    VIRTUALSTARTDATE = q.GetString(19);
 
     return *this;
 }
@@ -213,6 +220,9 @@ void SchedRow::as_json(PrettyWriter<StringBuffer>& json_writer) const
 
     json_writer.Key("VIRTUALFREQUENCY");
     json_writer.String(VIRTUALFREQUENCY.utf8_str());
+
+    json_writer.Key("VIRTUALSTARTDATE");
+    json_writer.String(VIRTUALSTARTDATE.utf8_str());
 }
 
 row_t SchedRow::to_html_row() const
@@ -238,6 +248,7 @@ row_t SchedRow::to_html_row() const
     row(L"COLOR") = COLOR.GetValue();
     row(L"ISVIRTUAL") = ISVIRTUAL.GetValue();
     row(L"VIRTUALFREQUENCY") = VIRTUALFREQUENCY;
+    row(L"VIRTUALSTARTDATE") = VIRTUALSTARTDATE;
 
     return row;
 }
@@ -263,6 +274,7 @@ void SchedRow::to_html_template(html_template& t) const
     t(L"COLOR") = COLOR.GetValue();
     t(L"ISVIRTUAL") = ISVIRTUAL.GetValue();
     t(L"VIRTUALFREQUENCY") = VIRTUALFREQUENCY;
+    t(L"VIRTUALSTARTDATE") = VIRTUALSTARTDATE;
 }
 
 bool SchedRow::equals(const SchedRow* other) const
@@ -286,6 +298,7 @@ bool SchedRow::equals(const SchedRow* other) const
     if ( COLOR != other->COLOR) return false;
     if ( ISVIRTUAL != other->ISVIRTUAL) return false;
     if (!VIRTUALFREQUENCY.IsSameAs(other->VIRTUALFREQUENCY)) return false;
+    if (!VIRTUALSTARTDATE.IsSameAs(other->VIRTUALSTARTDATE)) return false;
 
     return true;
 }
@@ -294,7 +307,7 @@ SchedTable::SchedTable()
 {
     m_table_name = "BILLSDEPOSITS_V1";
 
-    m_create_query = "CREATE TABLE BILLSDEPOSITS_V1(BDID integer primary key, ACCOUNTID integer NOT NULL, TOACCOUNTID integer, PAYEEID integer NOT NULL, TRANSCODE TEXT NOT NULL /* Withdrawal, Deposit, Transfer */, TRANSAMOUNT numeric NOT NULL, STATUS TEXT /* None, Reconciled, Void, Follow up, Duplicate */, TRANSACTIONNUMBER TEXT, NOTES TEXT, CATEGID integer, TRANSDATE TEXT, FOLLOWUPID integer, TOTRANSAMOUNT numeric, REPEATS integer, NEXTOCCURRENCEDATE TEXT, NUMOCCURRENCES integer, COLOR integer DEFAULT -1, ISVIRTUAL INTEGER NOT NULL DEFAULT 0, VIRTUALFREQUENCY TEXT DEFAULT NULL)";
+    m_create_query = "CREATE TABLE BILLSDEPOSITS_V1(BDID integer primary key, ACCOUNTID integer NOT NULL, TOACCOUNTID integer, PAYEEID integer NOT NULL, TRANSCODE TEXT NOT NULL /* Withdrawal, Deposit, Transfer */, TRANSAMOUNT numeric NOT NULL, STATUS TEXT /* None, Reconciled, Void, Follow up, Duplicate */, TRANSACTIONNUMBER TEXT, NOTES TEXT, CATEGID integer, TRANSDATE TEXT, FOLLOWUPID integer, TOTRANSAMOUNT numeric, REPEATS integer, NEXTOCCURRENCEDATE TEXT, NUMOCCURRENCES integer, COLOR integer DEFAULT -1, ISVIRTUAL INTEGER NOT NULL DEFAULT 0, VIRTUALFREQUENCY TEXT DEFAULT NULL, VIRTUALSTARTDATE TEXT DEFAULT NULL)";
 
     m_drop_query = "DROP TABLE IF EXISTS BILLSDEPOSITS_V1";
 
@@ -302,11 +315,11 @@ SchedTable::SchedTable()
         "CREATE INDEX IF NOT EXISTS IDX_BILLSDEPOSITS_ACCOUNT ON BILLSDEPOSITS_V1 (ACCOUNTID, TOACCOUNTID)"
     };
 
-    m_insert_query = "INSERT INTO BILLSDEPOSITS_V1(ACCOUNTID, TOACCOUNTID, PAYEEID, TRANSCODE, TRANSAMOUNT, STATUS, TRANSACTIONNUMBER, NOTES, CATEGID, TRANSDATE, FOLLOWUPID, TOTRANSAMOUNT, REPEATS, NEXTOCCURRENCEDATE, NUMOCCURRENCES, COLOR, ISVIRTUAL, VIRTUALFREQUENCY, BDID) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    m_insert_query = "INSERT INTO BILLSDEPOSITS_V1(ACCOUNTID, TOACCOUNTID, PAYEEID, TRANSCODE, TRANSAMOUNT, STATUS, TRANSACTIONNUMBER, NOTES, CATEGID, TRANSDATE, FOLLOWUPID, TOTRANSAMOUNT, REPEATS, NEXTOCCURRENCEDATE, NUMOCCURRENCES, COLOR, ISVIRTUAL, VIRTUALFREQUENCY, VIRTUALSTARTDATE, BDID) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-    m_update_query = "UPDATE BILLSDEPOSITS_V1 SET ACCOUNTID = ?, TOACCOUNTID = ?, PAYEEID = ?, TRANSCODE = ?, TRANSAMOUNT = ?, STATUS = ?, TRANSACTIONNUMBER = ?, NOTES = ?, CATEGID = ?, TRANSDATE = ?, FOLLOWUPID = ?, TOTRANSAMOUNT = ?, REPEATS = ?, NEXTOCCURRENCEDATE = ?, NUMOCCURRENCES = ?, COLOR = ?, ISVIRTUAL = ?, VIRTUALFREQUENCY = ? WHERE BDID = ?";
+    m_update_query = "UPDATE BILLSDEPOSITS_V1 SET ACCOUNTID = ?, TOACCOUNTID = ?, PAYEEID = ?, TRANSCODE = ?, TRANSAMOUNT = ?, STATUS = ?, TRANSACTIONNUMBER = ?, NOTES = ?, CATEGID = ?, TRANSDATE = ?, FOLLOWUPID = ?, TOTRANSAMOUNT = ?, REPEATS = ?, NEXTOCCURRENCEDATE = ?, NUMOCCURRENCES = ?, COLOR = ?, ISVIRTUAL = ?, VIRTUALFREQUENCY = ?, VIRTUALSTARTDATE = ? WHERE BDID = ?";
 
     m_delete_query = "DELETE FROM BILLSDEPOSITS_V1 WHERE BDID = ?";
 
-    m_select_query = "SELECT BDID, ACCOUNTID, TOACCOUNTID, PAYEEID, TRANSCODE, TRANSAMOUNT, STATUS, TRANSACTIONNUMBER, NOTES, CATEGID, TRANSDATE, FOLLOWUPID, TOTRANSAMOUNT, REPEATS, NEXTOCCURRENCEDATE, NUMOCCURRENCES, COLOR, ISVIRTUAL, VIRTUALFREQUENCY FROM BILLSDEPOSITS_V1";
+    m_select_query = "SELECT BDID, ACCOUNTID, TOACCOUNTID, PAYEEID, TRANSCODE, TRANSAMOUNT, STATUS, TRANSACTIONNUMBER, NOTES, CATEGID, TRANSDATE, FOLLOWUPID, TOTRANSAMOUNT, REPEATS, NEXTOCCURRENCEDATE, NUMOCCURRENCES, COLOR, ISVIRTUAL, VIRTUALFREQUENCY, VIRTUALSTARTDATE FROM BILLSDEPOSITS_V1";
 }
