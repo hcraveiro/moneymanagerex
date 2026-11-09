@@ -89,9 +89,124 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  windows-build:
+    name: Windows x64 (installer and portable ZIP)
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - name: Checkout source and pinned database submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Activate Visual Studio 2022 x64 compiler
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Windows packaging tools
+        shell: pwsh
+        run: |
+          choco install nsis --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "NSIS installation failed" }
+          choco install gettext --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "gettext installation failed" }
+
+      - name: Set dependency directories
+        shell: pwsh
+        run: |
+          "WX_ROOT=$env:RUNNER_TEMP\wxWidgets-3.3.4" >> $env:GITHUB_ENV
+          "CURL_ROOT=$env:RUNNER_TEMP\curl-install" >> $env:GITHUB_ENV
+
+      - name: Cache wxWidgets 3.3.4 for Windows
+        id: wx-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\wxWidgets-3.3.4
+          key: wxwidgets-3.3.4-msvc143-x64-webview2-v1
+
+      - name: Download and compile wxWidgets with Edge WebView
+        if: steps.wx-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "wxWidgets-3.3.4.7z"
+          & curl.exe --fail --location --show-error --silent --retry 3 --output $archive "https://github.com/wxWidgets/wxWidgets/releases/download/v3.3.4/wxWidgets-3.3.4.7z"
+          if ($LASTEXITCODE -ne 0) { throw "wxWidgets download failed" }
+          New-Item -ItemType Directory -Force -Path $env:WX_ROOT | Out-Null
+          $sevenZip = Join-Path $env:ProgramFiles "7-Zip\7z.exe"
+          & $sevenZip x -y "-o$env:WX_ROOT" $archive
+          if ($LASTEXITCODE -ne 0) { throw "wxWidgets extraction failed" }
+          Push-Location $env:WX_ROOT
+          try {
+            & cmake . -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DwxBUILD_SHARED=ON -DwxUSE_WEBVIEW_EDGE=ON -DwxBUILD_VENDOR=mmex
+            if ($LASTEXITCODE -ne 0) { throw "wxWidgets configuration failed" }
+            & cmake --build . --config Release
+            if ($LASTEXITCODE -ne 0) { throw "wxWidgets compilation failed" }
+          }
+          finally { Pop-Location }
+
+      - name: Cache libcurl for Windows
+        id: curl-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\curl-install
+          key: curl-8.5.0-msvc143-x64-schannel-v1
+
+      - name: Build libcurl with Windows Schannel
+        if: steps.curl-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP "curl-source"
+          $build = Join-Path $env:RUNNER_TEMP "curl-build"
+          & git clone --quiet --depth 1 --branch "curl-8_5_0" --single-branch "https://github.com/curl/curl.git" $source
+          if ($LASTEXITCODE -ne 0) { throw "libcurl download failed" }
+          & cmake -S $source -B $build -G "Visual Studio 17 2022" -A x64 -T "v143,host=x64" -DBUILD_CURL_EXE=OFF -DHTTP_ONLY=ON -DCURL_USE_SCHANNEL=ON -DBUILD_TESTING=OFF "-DCMAKE_INSTALL_PREFIX=$env:CURL_ROOT"
+          if ($LASTEXITCODE -ne 0) { throw "libcurl configuration failed" }
+          & cmake --build $build --target install --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw "libcurl compilation failed" }
+
+      - name: Verify schema and compiled dependencies
+        shell: pwsh
+        run: |
+          if (!(Test-Path "database/incremental_upgrade/database_version_22.sql")) { throw "Database v22 migration is missing" }
+          if (!(Test-Path "$env:WX_ROOT\lib\vc_x64_dll")) { throw "wxWidgets MSVC DLL libraries were not generated" }
+          if (!(Test-Path "$env:CURL_ROOT\include\curl\curl.h")) { throw "libcurl development headers are missing" }
+
+      - name: Configure and compile MMEX for Windows x64
+        shell: pwsh
+        run: |
+          & cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 -T "v143,host=x64" "-DwxWidgets_ROOT_DIR=$env:WX_ROOT" "-DwxWidgets_LIB_DIR=$env:WX_ROOT\lib\vc_x64_dll" "-DCMAKE_PREFIX_PATH=$env:CURL_ROOT" -DwxWidgets_USE_REL_AND_DBG=OFF -DMMEX_PORTABLE_INSTALL=OFF
+          if ($LASTEXITCODE -ne 0) { throw "MMEX Windows configuration failed" }
+          & cmake --build build-win --target mmex --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw "MMEX Windows compilation failed" }
+
+      - name: Package installer (NSIS) and portable ZIP
+        shell: pwsh
+        run: |
+          & cpack -G NSIS -C Release --config build-win/CPackConfig.cmake -B build-win
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer packaging failed" }
+          # Add the portable-mode marker only to the ZIP, never to the installer.
+          & cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 -T "v143,host=x64" "-DwxWidgets_ROOT_DIR=$env:WX_ROOT" "-DwxWidgets_LIB_DIR=$env:WX_ROOT\lib\vc_x64_dll" "-DCMAKE_PREFIX_PATH=$env:CURL_ROOT" -DwxWidgets_USE_REL_AND_DBG=OFF -DMMEX_PORTABLE_INSTALL=ON
+          if ($LASTEXITCODE -ne 0) { throw "Portable package configuration failed" }
+          & cpack -G ZIP -C Release --config build-win/CPackConfig.cmake -B build-win
+          if ($LASTEXITCODE -ne 0) { throw "Windows portable packaging failed" }
+          if (-not (Get-ChildItem build-win -Filter "*.exe" -File)) { throw "Windows installer output is missing" }
+          if (-not (Get-ChildItem build-win -Filter "*.zip" -File)) { throw "Windows portable ZIP output is missing" }
+
+      - name: Upload Windows x64 installer and portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmex-virtual-windows-x64
+          path: |
+            build-win/*.exe
+            build-win/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
   prerelease:
     name: Create GitHub prerelease (tag only)
-    needs: linux-build
+    needs: [linux-build, windows-build]
     if: startsWith(github.ref, 'refs/tags/virtual-v') && github.repository == 'hcraveiro/moneymanagerex'
     runs-on: ubuntu-24.04
     permissions:
@@ -101,12 +216,21 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: mmex-virtual-linux-deb
-          path: dist
+          path: dist/linux
+
+      - name: Download verified Windows x64 build
+        uses: actions/download-artifact@v4
+        with:
+          name: mmex-virtual-windows-x64
+          path: dist/windows
 
       - name: Publish opt-in prerelease
         uses: softprops/action-gh-release@v2
         with:
           prerelease: true
           generate_release_notes: true
-          files: dist/*.deb
+          files: |
+            dist/linux/*.deb
+            dist/windows/*.exe
+            dist/windows/*.zip
           fail_on_unmatched_files: true
