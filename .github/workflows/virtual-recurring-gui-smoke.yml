@@ -68,6 +68,8 @@ jobs:
           path: |
             ${{ runner.temp }}/mmex-gui-smoke/mmex-initial.png
             ${{ runner.temp }}/mmex-gui-smoke/mmex-after-startup.png
+            ${{ runner.temp }}/mmex-gui-smoke/mmex-scheduled-transactions.png
+            ${{ runner.temp }}/mmex-gui-smoke/mmex-reports-navigation.png
             ${{ runner.temp }}/mmex-gui-smoke/mmex.log
             ${{ runner.temp }}/mmex-gui-smoke/windows.txt
             ${{ runner.temp }}/mmex-gui-smoke/window-summary.txt
