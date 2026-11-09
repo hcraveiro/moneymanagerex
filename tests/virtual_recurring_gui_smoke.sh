@@ -20,6 +20,12 @@ export GDK_BACKEND=x11
 export NO_AT_BRIDGE=1
 export WEBKIT_DISABLE_COMPOSITING_MODE=1
 
+# Start a lightweight X11 window manager to support window activation and
+# keyboard focus, which Xvfb alone does not provide.
+openbox --sm-disable > "$output_dir/window-manager.log" 2>&1 &
+manager_pid=$!
+sleep 2
+
 database="$output_dir/working-copy-v22.mmb"
 log_file="$output_dir/mmex.log"
 windows_file="$output_dir/windows.txt"
@@ -32,12 +38,16 @@ import sys
 
 with sqlite3.connect(sys.argv[1]) as connection:
     data = {
-        "posted": connection.execute(
-            "SELECT * FROM CHECKINGACCOUNT_V1 ORDER BY TRANSID"
-        ).fetchall(),
-        "scheduled": connection.execute(
-            "SELECT * FROM BILLSDEPOSITS_V1 ORDER BY BDID"
-        ).fetchall(),
+        "posted": [
+            list(record) for record in connection.execute(
+                "SELECT * FROM CHECKINGACCOUNT_V1 ORDER BY TRANSID"
+            )
+        ],
+        "scheduled": [
+            list(record) for record in connection.execute(
+                "SELECT * FROM BILLSDEPOSITS_V1 ORDER BY BDID"
+            )
+        ],
     }
 with open(sys.argv[2], "w", encoding="utf-8") as output:
     json.dump(data, output, ensure_ascii=False)
@@ -81,10 +91,17 @@ printf 'MMEX window id: %s\nWindow title: %s\n' "$found_window" "$window_title" 
 # anonymous statistics before acknowledging the dialog in our test profile.
 if [[ "$window_title" == "License agreement" ]]; then
   scrot "$output_dir/mmex-initial.png"
-  xdotool windowactivate --sync "$found_window" || true
+  xdotool windowactivate --sync "$found_window"
   xdotool mousemove --window "$found_window" 77 533 click 1
   sleep 1
   xdotool mousemove --window "$found_window" 205 573 click 1
+  sleep 2
+  # If window decorations or GTK's focus policy prevent the mouse click,
+  # send the default button's keyboard activation.
+  if xdotool search --onlyvisible --name "^License agreement$" >/dev/null 2>&1; then
+    xdotool windowactivate --sync "$found_window" || true
+    xdotool key --clearmodifiers Tab Return
+  fi
   sleep 5
 fi
 
@@ -119,12 +136,16 @@ with open(sys.argv[2], encoding="utf-8") as source:
     expected = json.load(source)
 with sqlite3.connect(sys.argv[1]) as connection:
     actual = {
-        "posted": connection.execute(
-            "SELECT * FROM CHECKINGACCOUNT_V1 ORDER BY TRANSID"
-        ).fetchall(),
-        "scheduled": connection.execute(
-            "SELECT * FROM BILLSDEPOSITS_V1 ORDER BY BDID"
-        ).fetchall(),
+        "posted": [
+            list(record) for record in connection.execute(
+                "SELECT * FROM CHECKINGACCOUNT_V1 ORDER BY TRANSID"
+            )
+        ],
+        "scheduled": [
+            list(record) for record in connection.execute(
+                "SELECT * FROM BILLSDEPOSITS_V1 ORDER BY BDID"
+            )
+        ],
     }
     assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
 if actual != expected:
