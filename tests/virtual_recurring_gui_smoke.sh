@@ -124,6 +124,22 @@ if ! kill -0 "$app_pid" 2>/dev/null || [[ -z "$(xdotool search --onlyvisible --p
   exit 1
 fi
 
+main_window="$(xdotool search --onlyvisible --pid "$app_pid" 2>/dev/null | tail -n 1 || true)"
+main_title="$(xdotool getwindowname "$main_window" 2>/dev/null || true)"
+if [[ "$main_title" != *"Money Manager Ex"* ]]; then
+  echo "Main MMEX window not found: $main_title" >&2
+  exit 1
+fi
+xdotool windowactivate --sync "$main_window"
+
+# Read-only visual checks of the actual Desktop navigation views.
+xdotool mousemove 111 171 click 1
+sleep 3
+scrot "$output_dir/mmex-scheduled-transactions.png"
+xdotool mousemove 66 327 click 1
+sleep 2
+scrot "$output_dir/mmex-reports-navigation.png"
+
 cleanup
 trap - EXIT
 
