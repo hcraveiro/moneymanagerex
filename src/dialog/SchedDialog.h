@@ -84,6 +84,8 @@ private:
         ID_DIALOG_BD,
         mmID_ACCOUNTNAME,
         ID_DIALOG_BD_COMBOBOX_REPEATS,
+        ID_DIALOG_BD_CHECKBOX_VIRTUAL,
+        ID_DIALOG_BD_CHOICE_VIRTUAL_FREQUENCY,
         ID_DIALOG_BD_TEXTCTRL_NUM_TIMES,
         ID_DIALOG_BD_CHECKBOX_AUTO_EXECUTE_USERACK,
         ID_DIALOG_BD_CHECKBOX_AUTO_EXECUTE_SILENT,
@@ -140,6 +142,8 @@ private:
     mmDatePicker*       w_pay_date          = nullptr; // Stored in TRANSDATE
     mmDatePicker*       w_due_date          = nullptr; // Stored in NEXTOCCURRENCEDATE
     wxChoice*           w_freq_choice       = nullptr;
+    wxCheckBox*         w_virtual_cb        = nullptr;
+    wxChoice*           w_virtual_freq_choice = nullptr;
     wxCheckBox*         w_mode_suggested_cb = nullptr;
     wxCheckBox*         w_mode_automated_cb = nullptr;
     wxStaticText*       w_static_freq       = nullptr;
@@ -187,6 +191,8 @@ public:
 
 private:
     auto getRepeatFreq() -> RepeatFreq;
+    wxString getVirtualFrequencyKey() const;
+    void updateVirtualControls();
     void updateControlsForTransType();
     void setAmountCurrencies(int64 account_id, int64 to_account_id);
     void setTooltips();
@@ -217,6 +223,7 @@ private:
     void onFrequentUsedNotes(           wxCommandEvent&    event);
     void onNoteSelected(                wxCommandEvent&    event);
     void onRepeatTypeChanged(           wxCommandEvent&    event);
+    void onVirtualChanged(              wxCommandEvent&    event);
     void onsetPrevOrNextRepeatDate(     wxCommandEvent&    event);
     void onMoreFields(                  wxCommandEvent&    event);
 };

@@ -26,6 +26,7 @@
 #include <wx/calctrl.h>
 #include <wx/valnum.h>
 
+#include "data/VirtualRecurringRules.h"
 #include "base/_constants.h"
 #include "base/mmDate.h"
 #include "util/mmPath.h"
@@ -46,6 +47,27 @@
 #include "AttachmentDialog.h"
 #include "SplitDialog.h"
 #include "import_export/webapp.h"
+
+namespace
+{
+virtual_recurring::Period nominal_virtual_period(const RepeatFreq& repeats)
+{
+    switch (repeats.id()) {
+    case RepeatFreq::e_1_week:
+        return virtual_recurring::Period::Weekly;
+    case RepeatFreq::e_1_month:
+    case RepeatFreq::e_month_last_day:
+    case RepeatFreq::e_month_last_business_day:
+        return virtual_recurring::Period::Monthly;
+    case RepeatFreq::e_3_months:
+        return virtual_recurring::Period::Quarterly;
+    case RepeatFreq::e_1_year:
+        return virtual_recurring::Period::Yearly;
+    default:
+        return virtual_recurring::Period::Unsupported;
+    }
+}
+} // namespace
 
 // Used to determine if we need to refresh the tag text ctrl after
 // accelerator hints are shown which only occurs once.
@@ -69,6 +91,7 @@ wxBEGIN_EVENT_TABLE(SchedDialog, wxDialog)
                                                     SchedDialog::onAutoExecutionUserAckChecked)
     EVT_CHECKBOX(ID_DIALOG_BD_CHECKBOX_AUTO_EXECUTE_SILENT,
                                                     SchedDialog::onAutoExecutionSilentChecked)
+    EVT_CHECKBOX(ID_DIALOG_BD_CHECKBOX_VIRTUAL,      SchedDialog::onVirtualChanged)
     EVT_CHOICE(ID_DIALOG_BD_COMBOBOX_REPEATS,       SchedDialog::onRepeatTypeChanged)
     EVT_BUTTON(ID_DIALOG_TRANS_BUTTONTRANSNUMPREV,  SchedDialog::onsetPrevOrNextRepeatDate)
     EVT_BUTTON(ID_DIALOG_TRANS_BUTTONTRANSNUM,      SchedDialog::onsetPrevOrNextRepeatDate)
@@ -262,6 +285,17 @@ void SchedDialog::createControls()
 
     wxFlexGridSizer* itemFlexGridSizer52 = new wxFlexGridSizer(0, 2, 0, 0);
     repeatTransBoxSizer->Add(itemFlexGridSizer52);
+
+    // Virtual recurring transactions affect forecasts, never posted transactions.
+    w_virtual_cb = new wxCheckBox(
+        this, ID_DIALOG_BD_CHECKBOX_VIRTUAL, _t("Virtual")
+    );
+    mmToolTip(w_virtual_cb, _t("Distribute the scheduled amount in Cash Flow forecasts only"));
+    itemFlexGridSizer52->Add(w_virtual_cb, g_flagsH);
+
+    w_virtual_freq_choice = new wxChoice(this, ID_DIALOG_BD_CHOICE_VIRTUAL_FREQUENCY);
+    mmToolTip(w_virtual_freq_choice, _t("Frequency of virtual forecast amounts"));
+    itemFlexGridSizer52->Add(w_virtual_freq_choice, g_flagsH);
 
     // Repeat Times
 
@@ -637,6 +671,7 @@ void SchedDialog::dataToControls()
     setCategoryLabel();
 
     if (is_new()) {
+        updateVirtualControls();
         return;
     }
 
@@ -644,6 +679,7 @@ void SchedDialog::dataToControls()
     w_pay_date->setValue(m_sched_d.m_datetime.dateTime());
     w_due_date->setValue(m_sched_d.m_due_date.dateTime());
     w_freq_choice->SetSelection(m_sched_d.m_repeat.m_freq.id());
+    w_virtual_cb->SetValue(m_sched_d.is_virtual());
 
     if (m_sched_d.m_repeat.m_freq.has_num() && m_sched_d.m_repeat.m_num > 0) {
         w_repeat_num_text->SetValue(wxString::Format("%i", m_sched_d.m_repeat.m_num));
@@ -709,6 +745,8 @@ void SchedDialog::dataToControls()
         w_due_date->Enable(false);
         w_type_choice->Disable();
         w_freq_choice->Disable();
+        w_virtual_cb->Disable();
+        w_virtual_freq_choice->Disable();
         w_mode_automated_cb->Disable();
         w_mode_suggested_cb->Disable();
         w_repeat_num_text->Disable();
@@ -807,6 +845,83 @@ RepeatFreq SchedDialog::getRepeatFreq()
     return freq_id >= 0 ? RepeatFreq(freq_id) : RepeatFreq();
 }
 
+wxString SchedDialog::getVirtualFrequencyKey() const
+{
+    const int selected = w_virtual_freq_choice->GetSelection();
+    if (selected == wxNOT_FOUND)
+        return "";
+
+    const auto* data = static_cast<wxStringClientData*>(
+        w_virtual_freq_choice->GetClientObject(selected)
+    );
+    return data ? data->GetData() : "";
+}
+
+void SchedDialog::updateVirtualControls()
+{
+    wxString selected_key = getVirtualFrequencyKey();
+    if (selected_key.empty())
+        selected_key = m_sched_d.m_virtual_frequency;
+
+    const auto nominal = nominal_virtual_period(getRepeatFreq());
+    const bool supported = virtual_recurring::is_supported_nominal(nominal);
+    const bool can_enable = supported && !m_is_transfer && !is_enter();
+
+    w_virtual_freq_choice->Clear();
+
+    const virtual_recurring::Period frequencies[] = {
+        virtual_recurring::Period::Daily,
+        virtual_recurring::Period::Weekly,
+        virtual_recurring::Period::Monthly,
+        virtual_recurring::Period::Quarterly
+    };
+    for (const auto frequency : frequencies) {
+        if (!virtual_recurring::is_valid_frequency(nominal, frequency))
+            continue;
+
+        const wxString key(virtual_recurring::to_key(frequency));
+        const wxString translated = key == "Daily" ? _t("Daily")
+            : key == "Weekly" ? _t("Weekly")
+            : key == "Monthly" ? _t("Monthly")
+            : _t("Quarterly");
+        w_virtual_freq_choice->Append(translated, new wxStringClientData(key));
+    }
+
+    int choice = wxNOT_FOUND;
+    for (unsigned int i = 0; i < w_virtual_freq_choice->GetCount(); ++i) {
+        const auto* data = static_cast<wxStringClientData*>(
+            w_virtual_freq_choice->GetClientObject(i)
+        );
+        if (data && data->GetData() == selected_key) {
+            choice = static_cast<int>(i);
+            break;
+        }
+    }
+    if (choice == wxNOT_FOUND && w_virtual_freq_choice->GetCount() > 0)
+        choice = 0;
+    if (choice != wxNOT_FOUND)
+        w_virtual_freq_choice->SetSelection(choice);
+
+    if (!can_enable)
+        w_virtual_cb->SetValue(false);
+
+    w_virtual_cb->Enable(can_enable);
+    w_virtual_freq_choice->Enable(can_enable && w_virtual_cb->IsChecked());
+
+    if (w_virtual_cb->IsChecked()) {
+        m_mode_suggested = false;
+        m_mode_automated = false;
+        w_mode_suggested_cb->SetValue(false);
+        w_mode_automated_cb->SetValue(false);
+        w_mode_suggested_cb->Disable();
+        w_mode_automated_cb->Disable();
+    }
+    else if (!is_enter()) {
+        w_mode_suggested_cb->Enable(!m_mode_automated);
+        w_mode_automated_cb->Enable(!m_mode_suggested);
+    }
+}
+
 void SchedDialog::updateControlsForTransType()
 {
     wxStaticText* account_label = static_cast<wxStaticText*>(
@@ -855,6 +970,7 @@ void SchedDialog::updateControlsForTransType()
     }
 
     setTransferControls(m_is_transfer);
+    updateVirtualControls();
 
     if (w_advanced_cb->IsChecked()) {
         setAdvancedTransferControls(true);
@@ -1224,6 +1340,28 @@ void SchedDialog::onNoteSelected(wxCommandEvent& event)
 
 void SchedDialog::onOk(wxCommandEvent& WXUNUSED(event))
 {
+    if (is_enter() && m_sched_d.is_virtual()) {
+        wxMessageBox(
+            _t("Virtual recurring transactions cannot be entered as real transactions."),
+            _t("Virtual recurring transaction"), wxOK | wxICON_WARNING, this
+        );
+        return;
+    }
+
+    const bool enable_virtual = w_virtual_cb->IsChecked();
+    const wxString virtual_frequency_key = getVirtualFrequencyKey();
+    if (enable_virtual && (m_is_transfer ||
+        !virtual_recurring::is_valid_frequency(
+            nominal_virtual_period(getRepeatFreq()),
+            virtual_recurring::from_key(virtual_frequency_key.ToStdString())
+        ))) {
+        wxMessageBox(
+            _t("Select a virtual frequency shorter than the repeat period. Transfers are not supported."),
+            _t("Invalid virtual frequency"), wxOK | wxICON_ERROR, this
+        );
+        return;
+    }
+
     // Ideally 'paid date' should be on or before the 'due date'
     if (w_pay_date->GetValue().GetDateOnly() > w_due_date->GetValue()) {
         if (wxMessageBox(
@@ -1375,6 +1513,9 @@ void SchedDialog::onOk(wxCommandEvent& WXUNUSED(event))
 
     m_sched_d.m_due_date = mmDate(w_due_date->GetValue());
     m_sched_d.m_datetime = mmDateTime(w_pay_date->GetValue());
+    m_sched_d.m_is_virtual = enable_virtual;
+    if (enable_virtual)
+        m_sched_d.m_virtual_frequency = virtual_frequency_key;
 
     wxStringClientData* status_obj = static_cast<wxStringClientData *>(
         w_status_choice->GetClientObject(w_status_choice->GetSelection())
@@ -1547,6 +1688,8 @@ void SchedDialog::onOk(wxCommandEvent& WXUNUSED(event))
 
 void SchedDialog::onAutoExecutionUserAckChecked(wxCommandEvent& WXUNUSED(event))
 {
+    if (w_virtual_cb->IsChecked())
+        return;
     m_mode_suggested = !m_mode_suggested;
     if (m_mode_suggested) {
         w_mode_automated_cb->SetValue(false);
@@ -1560,6 +1703,8 @@ void SchedDialog::onAutoExecutionUserAckChecked(wxCommandEvent& WXUNUSED(event))
 
 void SchedDialog::onAutoExecutionSilentChecked(wxCommandEvent& WXUNUSED(event))
 {
+    if (w_virtual_cb->IsChecked())
+        return;
     m_mode_automated = !m_mode_automated;
     if (m_mode_automated) {
         w_mode_suggested_cb->SetValue(false);
@@ -1579,6 +1724,12 @@ void SchedDialog::onAdvanceChecked(wxCommandEvent& WXUNUSED(event))
 void SchedDialog::onRepeatTypeChanged(wxCommandEvent& WXUNUSED(event))
 {
     setRepeatDetails();
+    updateVirtualControls();
+}
+
+void SchedDialog::onVirtualChanged(wxCommandEvent& WXUNUSED(event))
+{
+    updateVirtualControls();
 }
 
 void SchedDialog::onsetPrevOrNextRepeatDate(wxCommandEvent& event)

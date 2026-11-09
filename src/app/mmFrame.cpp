@@ -619,6 +619,10 @@ void mmFrame::OnAutoRepeatTransactionsTimer(wxTimerEvent& /*event*/)
     for (SchedData& sched_d : SchedModel::instance().find_data_a(
         TableClause::ORDERBY(SchedCol::s_primary_name)
     )) {
+        // Virtual schedules are forecast-only, even if their stored mode is automated.
+        if (sched_d.is_virtual())
+            continue;
+
         mmDate today = mmDate::today();
         if (sched_d.m_due_date.daysSince(today) > 0)
             continue;

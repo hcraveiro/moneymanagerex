@@ -65,6 +65,11 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
+      - name: Test virtual frequency constraints (C++17)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringRulesTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-rules-test"
+          "${RUNNER_TEMP}/virtual-recurring-rules-test"
+
       - name: Verify virtual recurrence database schema
         run: |
           test -f database/incremental_upgrade/database_version_22.sql
