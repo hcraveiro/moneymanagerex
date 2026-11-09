@@ -70,6 +70,11 @@ jobs:
           c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringRulesTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-rules-test"
           "${RUNNER_TEMP}/virtual-recurring-rules-test"
 
+      - name: Test virtual cash-flow distribution (C++17)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringAllocationTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-allocation-test"
+          "${RUNNER_TEMP}/virtual-recurring-allocation-test"
+
       - name: Verify virtual recurrence database schema
         run: |
           test -f database/incremental_upgrade/database_version_22.sql
@@ -117,6 +122,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "NSIS installation failed" }
           choco install gettext --yes --no-progress
           if ($LASTEXITCODE -ne 0) { throw "gettext installation failed" }
+          $gettextRoot = Join-Path $env:ProgramFiles "gettext-iconv"
+          $msgfmt = Get-ChildItem -Path $gettextRoot -Recurse -File -Filter "msgfmt.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $msgfmt) { throw "Could not locate gettext msgfmt.exe" }
+          $gettextBin = $msgfmt.DirectoryName
+          $gettextBin >> $env:GITHUB_PATH
 
       - name: Set dependency directories
         shell: pwsh
