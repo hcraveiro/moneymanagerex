@@ -71,6 +71,14 @@ jobs:
             "${RUNNER_TEMP}/acceptance-v22.mmb" \
             "${RUNNER_TEMP}/mmex-gui-smoke"
 
+      - name: Verify GUI edit, disable and reactivate Virtual
+        run: |
+          timeout 180s xvfb-run -a -s "-screen 0 1440x900x24 -nolisten tcp" \
+            bash tests/virtual_recurring_gui_edit.sh \
+            /usr/bin/mmex \
+            "${RUNNER_TEMP}/acceptance-v22.mmb" \
+            "${RUNNER_TEMP}/mmex-gui-edit"
+
       - name: Upload privacy-safe GUI evidence and diagnostic diff
         if: always()
         uses: actions/upload-artifact@v4
@@ -96,5 +104,12 @@ jobs:
             ${{ runner.temp }}/mmex-gui-smoke/ledger-before.json
             ${{ runner.temp }}/mmex-gui-smoke/ledger-diff.json
             ${{ runner.temp }}/mmex-gui-smoke/working-copy-v22.mmb
+            ${{ runner.temp }}/mmex-gui-edit/edit-before.png
+            ${{ runner.temp }}/mmex-gui-edit/edit-amount-saved.png
+            ${{ runner.temp }}/mmex-gui-edit/virtual-unchecked.png
+            ${{ runner.temp }}/mmex-gui-edit/virtual-reactivated.png
+            ${{ runner.temp }}/mmex-gui-edit/edit-dialog-missing.png
+            ${{ runner.temp }}/mmex-gui-edit/mmex-edit.log
+            ${{ runner.temp }}/mmex-gui-edit/edited-copy-v22.mmb
           if-no-files-found: warn
           retention-days: 14
