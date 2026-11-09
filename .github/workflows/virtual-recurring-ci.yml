@@ -116,32 +116,9 @@ jobs:
           fi
           cmake --build build --target package --parallel 2
 
-      - name: Install tools for isolated graphical smoke test
-        run: sudo apt-get install -y --no-install-recommends xvfb xdotool wmctrl scrot
-
-      - name: Launch installed MMEX with synthetic v22 database under Xvfb
-        run: |
-          python3 acceptance-fixtures/tests/build_virtual_recurring_acceptance.py "${RUNNER_TEMP}/acceptance-v22.mmb"
-          mkdir -p "${RUNNER_TEMP}/mmex-installed"
-          dpkg-deb -x build/mmex*.deb "${RUNNER_TEMP}/mmex-installed"
-          xvfb-run -a -s "-screen 0 1440x900x24 -nolisten tcp" \
-            bash tests/virtual_recurring_gui_smoke.sh \
-            "${RUNNER_TEMP}/mmex-installed/usr/bin/mmex" \
-            "${RUNNER_TEMP}/acceptance-v22.mmb" \
-            "${RUNNER_TEMP}/mmex-gui-smoke"
-
-      - name: Upload isolated GUI screenshot and startup log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mmex-virtual-linux-gui-smoke
-          path: |
-            ${{ runner.temp }}/mmex-gui-smoke/mmex-initial.png
-            ${{ runner.temp }}/mmex-gui-smoke/mmex.log
-            ${{ runner.temp }}/mmex-gui-smoke/windows.txt
-            ${{ runner.temp }}/mmex-gui-smoke/window-summary.txt
-          if-no-files-found: warn
-          retention-days: 14
+      # Graphical acceptance has its own dedicated Xvfb workflow with
+      # a window manager and a pre-verified installed DEB. Keep this workflow
+      # focused on deterministic unit tests and Linux/Windows packaging.
 
       - name: Upload Linux DEB
         uses: actions/upload-artifact@v4
