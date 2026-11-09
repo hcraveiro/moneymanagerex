@@ -418,8 +418,8 @@ wxString FlowReport::getHTMLText_DayOrMonth(bool monthly)
     }
 
     // squash the data by month or day
-    for (const auto& forecast : m_forecastVector) {
-        const auto& trx_d = forecast.transaction;
+    for (auto& forecast : m_forecastVector) {
+        auto& trx_d = forecast.transaction;
         dt = trx_d.m_datetime.dateTime();
         wxString date = dt.FormatISODate();
         if (monthly) {
@@ -611,8 +611,8 @@ wxString mmReportCashFlowTransactions::getHTMLText()
     int lastRowDate = -1;
     bool rowType = false;
     runningBalance = m_balance;
-    for (const auto& forecast : m_forecastVector) {
-        const auto& trx_d = forecast.transaction;
+    for (auto& forecast : m_forecastVector) {
+        auto& trx_d = forecast.transaction;
         int rowDate = trx_d.m_datetime.dateTime(false).GetMonth();
         if (rowDate != lastRowDate) {
             lastRowDate = rowDate;
