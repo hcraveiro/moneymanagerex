@@ -69,6 +69,8 @@ jobs:
             ${{ runner.temp }}/mmex-gui-smoke/mmex-initial.png
             ${{ runner.temp }}/mmex-gui-smoke/mmex-after-startup.png
             ${{ runner.temp }}/mmex-gui-smoke/mmex-scheduled-transactions.png
+            ${{ runner.temp }}/mmex-gui-smoke/mmex-virtual-selected.png
+            ${{ runner.temp }}/mmex-gui-smoke/mmex-virtual-edit-dialog.png
             ${{ runner.temp }}/mmex-gui-smoke/mmex-reports-navigation.png
             ${{ runner.temp }}/mmex-gui-smoke/mmex.log
             ${{ runner.temp }}/mmex-gui-smoke/windows.txt
