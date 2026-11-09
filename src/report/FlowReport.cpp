@@ -313,9 +313,15 @@ void FlowReport::getTransactions()
                     };
                     const auto append_amount = [&](double source_amount, int64 category_id) {
                         const std::int64_t cents = std::llround(source_amount * scale);
-                        const auto allocated = virtual_recurring::allocate(
-                            cents, cycle_days, first_future, last_future, bucket_end
-                        );
+                        const auto allocated =
+                            (frequency == virtual_recurring::Period::Monthly
+                                || frequency == virtual_recurring::Period::Quarterly)
+                            ? virtual_recurring::allocate_equal_calendar_buckets(
+                                cents, cycle_days, first_future, last_future, calendar_ends
+                            )
+                            : virtual_recurring::allocate(
+                                cents, cycle_days, first_future, last_future, bucket_end
+                            );
                         for (const auto& item : allocated) {
                             wxDateTime date = previous_due.dateTime();
                             date.Add(wxDateSpan::Days(item.day_offset + 1));
