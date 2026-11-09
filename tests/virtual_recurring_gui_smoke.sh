@@ -151,6 +151,9 @@ sleep 1
 xdotool mousemove 10 328 click 1
 sleep 2
 scrot "$output_dir/mmex-reports-navigation.png"
+xdotool mousemove 20 355 click 1
+sleep 2
+scrot "$output_dir/mmex-cashflow-navigation.png"
 
 cleanup
 trap - EXIT
