@@ -45,16 +45,21 @@ jobs:
           find package -name '*.deb' -type f -print -quit | grep -q .
 
       - name: Install packaged MMEX and graphical test dependencies
+        timeout-minutes: 7
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          timeout 180s sudo apt-get -o Acquire::Retries=2 update
+          timeout 210s sudo DEBIAN_FRONTEND=noninteractive apt-get \
+            -o Dpkg::Options::=--force-confold \
+            install -y --no-install-recommends \
             ./package/mmex_*.deb xvfb xdotool wmctrl scrot openbox
 
       - name: Launch graphical application with no user financial data
         run: |
           python3 acceptance-fixtures/tests/build_virtual_recurring_acceptance.py \
             "${RUNNER_TEMP}/acceptance-v22.mmb"
-          xvfb-run -a -s "-screen 0 1440x900x24 -nolisten tcp" \
+          timeout 180s xvfb-run -a -s "-screen 0 1440x900x24 -nolisten tcp" \
             bash tests/virtual_recurring_gui_smoke.sh \
             /usr/bin/mmex \
             "${RUNNER_TEMP}/acceptance-v22.mmb" \
