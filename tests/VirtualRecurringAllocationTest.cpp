@@ -56,6 +56,25 @@ int main()
     assert(remaining_weekly[1].minor_units == 700);
     assert(sum(remaining_weekly) == 1000);
 
+    // Weekly buckets are stable and anchored backwards from November 30.
+    // On Nov 9: 21 future days => EUR 7 on Nov 16, 23 and 30.
+    const auto november_nine = allocate(3000, 30, 9, weekly);
+    assert(november_nine.size() == 3);
+    for (size_t i = 0; i < 3; ++i) {
+        assert(november_nine[i].day_offset == 15 + static_cast<int>(i) * 7);
+        assert(november_nine[i].minor_units == 700);
+    }
+
+    // On Nov 8: Nov 9 carries EUR 1, then three EUR 7 installments.
+    const auto november_eight = allocate(3000, 30, 8, weekly);
+    assert(november_eight.size() == 4);
+    assert(november_eight[0].day_offset == 8);
+    assert(november_eight[0].minor_units == 100);
+    for (size_t i = 1; i < 4; ++i) {
+        assert(november_eight[i].day_offset == 8 + static_cast<int>(i) * 7);
+        assert(november_eight[i].minor_units == 700);
+    }
+
     // Activated on November 25: only November 26-30 must be forecast.
     const int activated_mid_cycle = first_forecast_day(0, 20, 25);
     const auto activated_daily = allocate(3000, 30, activated_mid_cycle, daily);
