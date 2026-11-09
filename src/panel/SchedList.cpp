@@ -199,8 +199,9 @@ void SchedList::OnItemRightClick(wxMouseEvent& event)
     menu.AppendSeparator();
     menu.Append(MENU_TREEPOPUP_ORGANIZE_ATTACHMENTS, _tu("&Organize Attachments…"));
 
-    menu.Enable(MENU_POPUP_BD_ENTER_OCCUR, item_active);
-    menu.Enable(MENU_POPUP_BD_SKIP_OCCUR, item_active);
+    const bool can_enter = item_active && !w_panel->m_sched_xa[m_select_n].is_virtual();
+    menu.Enable(MENU_POPUP_BD_ENTER_OCCUR, can_enter);
+    menu.Enable(MENU_POPUP_BD_SKIP_OCCUR, can_enter);
     menu.Enable(MENU_TREEPOPUP_EDIT, item_active);
     menu.Enable(MENU_TREEPOPUP_DUPLICATE, item_active);
     menu.Enable(MENU_TREEPOPUP_DELETE, item_active);

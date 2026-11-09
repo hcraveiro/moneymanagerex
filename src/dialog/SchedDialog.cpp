@@ -1552,9 +1552,6 @@ void SchedDialog::onOk(wxCommandEvent& WXUNUSED(event))
         m_sched_d.m_due_date = next_due;
         m_sched_d.m_datetime = mmDateTime(next_paid, payment_time);
     }
-    // Only update the stored Virtual state once all transition checks pass.
-    m_sched_d.m_is_virtual = enable_virtual;
-
     wxStringClientData* status_obj = static_cast<wxStringClientData *>(
         w_status_choice->GetClientObject(w_status_choice->GetSelection())
     );
@@ -1585,6 +1582,8 @@ void SchedDialog::onOk(wxCommandEvent& WXUNUSED(event))
             _t("Invalid Date")
         );
 
+    // Commit the virtual flag only after all other validation has completed.
+    m_sched_d.m_is_virtual = enable_virtual;
     if (!is_enter()) {
         SchedData sched_d = m_sched_d;
         if (m_mode == MODE_ADD)
