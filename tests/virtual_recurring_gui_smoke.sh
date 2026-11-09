@@ -155,6 +155,17 @@ xdotool mousemove 20 355 click 1
 sleep 2
 scrot "$output_dir/mmex-cashflow-navigation.png"
 
+# Open the three production Cash Flow reports in sequence.
+xdotool mousemove 85 379 click 1
+sleep 6
+scrot "$output_dir/mmex-cashflow-daily.png"
+xdotool mousemove 85 405 click 1
+sleep 6
+scrot "$output_dir/mmex-cashflow-monthly.png"
+xdotool mousemove 102 431 click 1
+sleep 6
+scrot "$output_dir/mmex-cashflow-transactions.png"
+
 cleanup
 trap - EXIT
 
