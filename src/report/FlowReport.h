@@ -33,7 +33,12 @@ protected:
     wxString getHTMLText_DayOrMonth(bool monthly = false);
     void getTransactions();
     double m_balance;
-    std::vector<TrxData> m_forecastVector;
+    struct ForecastEntry
+    {
+        TrxData transaction;
+        bool is_virtual;
+    };
+    std::vector<ForecastEntry> m_forecastVector;
 
 private:
     double trueAmount(const TrxData& trx);
