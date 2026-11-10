@@ -1,0 +1,309 @@
+name: Virtual Recurring - Desktop CI
+
+on:
+  push:
+    branches:
+      - feature/virtual-recurring-transactions
+    tags:
+      - 'virtual-v*'
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: virtual-desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-build:
+    name: Linux DEB (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential libssl-dev gettext git pkg-config \
+            lsb-release file ccache libgtk-3-dev liblua5.3-dev \
+            libcurl4-openssl-dev libwebkit2gtk-4.1-dev wget appstream fuse
+
+      - name: Cache wxWidgets 3.3.4 build
+        id: wx-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/wxWidgets
+          key: wxwidgets-3.3.4-ubuntu-24.04-mmex-v1
+
+      - name: Build wxWidgets 3.3.4
+        if: steps.wx-cache.outputs.cache-hit != 'true'
+        run: |
+          cd "${RUNNER_TEMP}"
+          wget -q "https://github.com/wxWidgets/wxWidgets/releases/download/v3.3.4/wxWidgets-3.3.4.tar.bz2"
+          tar -xjf wxWidgets-3.3.4.tar.bz2
+          mv wxWidgets-3.3.4 wxWidgets
+          cd wxWidgets
+          mkdir -p build-linux
+          cd build-linux
+          ../configure --enable-std_containers --disable-shared \
+            --with-cxx=17 --enable-webview --with-gtk=3 --enable-intl
+          make -j2
+
+      - name: Install wxWidgets
+        run: |
+          cd "${RUNNER_TEMP}/wxWidgets/build-linux"
+          sudo make install
+          sudo ldconfig
+
+      - name: Checkout source and pinned database submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Checkout pinned cross-client acceptance vectors
+        uses: actions/checkout@v4
+        with:
+          repository: hcraveiro/database
+          ref: d8c1a0fe256d7ca3d5546f3259781535827916da
+          path: acceptance-fixtures
+          persist-credentials: false
+
+      - name: Test shared Desktop-Android acceptance matrix (C++17)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringAcceptanceTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-acceptance-test"
+          "${RUNNER_TEMP}/virtual-recurring-acceptance-test" acceptance-fixtures/tests/virtual_recurring_acceptance.csv
+
+      - name: Test virtual frequency constraints (C++17)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringRulesTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-rules-test"
+          "${RUNNER_TEMP}/virtual-recurring-rules-test"
+
+      - name: Test virtual cash-flow distribution (C++17)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringAllocationTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-allocation-test"
+          "${RUNNER_TEMP}/virtual-recurring-allocation-test"
+
+      - name: Test skipping expired virtual occurrences (C++17)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringAdvanceTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-advance-test"
+          "${RUNNER_TEMP}/virtual-recurring-advance-test"
+
+      - name: Test calendar-anchored virtual frequencies (C++17)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -I. tests/VirtualRecurringCalendarTest.cpp -o "${RUNNER_TEMP}/virtual-recurring-calendar-test"
+          "${RUNNER_TEMP}/virtual-recurring-calendar-test"
+
+      - name: Verify virtual recurrence database schema
+        run: |
+          test -f database/incremental_upgrade/database_version_22.sql
+          grep -q "dbLatestVersion = 22;" src/table/_TableUpgrade.h
+          grep -q "VIRTUALFREQUENCY" src/table/SchedTable.cpp
+          grep -q "VIRTUALSTARTDATE" database/incremental_upgrade/database_version_22.sql
+          grep -q "VIRTUALSTARTDATE" src/table/SchedTable.cpp
+
+      - name: Configure and package desktop application
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          if [ ! -f build/org.moneymanagerex.MMEX.metainfo.xml ]; then
+            echo "AppStream metadata not generated; using source template for development package"
+            cp resources/dist/linux/share/metainfo/org.moneymanagerex.MMEX.metainfo.xml.in \
+              build/org.moneymanagerex.MMEX.metainfo.xml
+          fi
+          cmake --build build --target package --parallel 2
+
+      # Graphical acceptance has its own dedicated Xvfb workflow with
+      # a window manager and a pre-verified installed DEB. Keep this workflow
+      # focused on deterministic unit tests and Linux/Windows packaging.
+
+      - name: Upload Linux DEB
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmex-virtual-linux-deb
+          path: build/mmex*.deb
+          if-no-files-found: error
+          retention-days: 14
+
+  windows-build:
+    name: Windows x64 (installer and portable ZIP)
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - name: Checkout source and pinned database submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Activate Visual Studio 2022 x64 compiler
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Windows packaging tools
+        shell: pwsh
+        run: |
+          choco install nsis --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "NSIS installation failed" }
+          choco install gettext --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "gettext installation failed" }
+          $gettextRoot = Join-Path $env:ProgramFiles "gettext-iconv"
+          $msgfmt = Get-ChildItem -Path $gettextRoot -Recurse -File -Filter "msgfmt.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $msgfmt) { throw "Could not locate gettext msgfmt.exe" }
+          $gettextBin = $msgfmt.DirectoryName
+          $gettextBin >> $env:GITHUB_PATH
+
+      - name: Set dependency directories
+        shell: pwsh
+        run: |
+          "WX_ROOT=$env:RUNNER_TEMP\wxWidgets-3.3.4" >> $env:GITHUB_ENV
+          "CURL_ROOT=$env:RUNNER_TEMP\curl-install" >> $env:GITHUB_ENV
+
+      - name: Cache wxWidgets 3.3.4 for Windows
+        id: wx-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\wxWidgets-3.3.4
+          key: wxwidgets-3.3.4-msvc143-x64-webview2-v1
+
+      - name: Download and compile wxWidgets with Edge WebView
+        if: steps.wx-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "wxWidgets-3.3.4.7z"
+          & curl.exe --fail --location --show-error --silent --retry 3 --output $archive "https://github.com/wxWidgets/wxWidgets/releases/download/v3.3.4/wxWidgets-3.3.4.7z"
+          if ($LASTEXITCODE -ne 0) { throw "wxWidgets download failed" }
+          New-Item -ItemType Directory -Force -Path $env:WX_ROOT | Out-Null
+          $sevenZip = Join-Path $env:ProgramFiles "7-Zip\7z.exe"
+          & $sevenZip x -y "-o$env:WX_ROOT" $archive
+          if ($LASTEXITCODE -ne 0) { throw "wxWidgets extraction failed" }
+          Push-Location $env:WX_ROOT
+          try {
+            & cmake . -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DwxBUILD_SHARED=ON -DwxUSE_WEBVIEW_EDGE=ON -DwxBUILD_VENDOR=mmex
+            if ($LASTEXITCODE -ne 0) { throw "wxWidgets configuration failed" }
+            & cmake --build . --config Release
+            if ($LASTEXITCODE -ne 0) { throw "wxWidgets compilation failed" }
+          }
+          finally { Pop-Location }
+
+      - name: Cache libcurl for Windows
+        id: curl-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\curl-install
+          key: curl-8.5.0-msvc143-x64-schannel-shared-v2
+
+      - name: Build libcurl with Windows Schannel
+        if: steps.curl-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP "curl-source"
+          $build = Join-Path $env:RUNNER_TEMP "curl-build"
+          & git clone --quiet --depth 1 --branch "curl-8_5_0" --single-branch "https://github.com/curl/curl.git" $source
+          if ($LASTEXITCODE -ne 0) { throw "libcurl download failed" }
+          & cmake -S $source -B $build -G "Visual Studio 17 2022" -A x64 -T "v143,host=x64" -DBUILD_CURL_EXE=OFF -DBUILD_SHARED_LIBS=ON -DBUILD_STATIC_LIBS=OFF -DHTTP_ONLY=ON -DCURL_USE_SCHANNEL=ON -DBUILD_TESTING=OFF "-DCMAKE_INSTALL_PREFIX=$env:CURL_ROOT"
+          if ($LASTEXITCODE -ne 0) { throw "libcurl configuration failed" }
+          & cmake --build $build --target install --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw "libcurl compilation failed" }
+
+      - name: Verify schema and compiled dependencies
+        shell: pwsh
+        run: |
+          if (!(Test-Path "database/incremental_upgrade/database_version_22.sql")) { throw "Database v22 migration is missing" }
+          if (!(Test-Path "$env:WX_ROOT\lib\vc_x64_dll")) { throw "wxWidgets MSVC DLL libraries were not generated" }
+          if (!(Test-Path "$env:CURL_ROOT\include\curl\curl.h")) { throw "libcurl development headers are missing" }
+          $curlDll = Get-ChildItem -Path $env:CURL_ROOT -Filter libcurl.dll -File -Recurse |
+            Select-Object -First 1
+          if (-not $curlDll) {
+            throw "The libcurl Windows build did not install libcurl.dll; cannot ship a working MMEX executable"
+          }
+          $runtimeDir = Join-Path $env:CURL_ROOT "bin"
+          $runtimeDll = Join-Path $runtimeDir "libcurl.dll"
+          New-Item -Path $runtimeDir -ItemType Directory -Force | Out-Null
+          if ($curlDll.FullName -ne $runtimeDll) {
+            Copy-Item -LiteralPath $curlDll.FullName -Destination $runtimeDll -Force
+          }
+          Write-Host "Verified Windows libcurl runtime: $runtimeDll"
+
+      - name: Configure and compile MMEX for Windows x64
+        shell: pwsh
+        run: |
+          & cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 -T "v143,host=x64" "-DwxWidgets_ROOT_DIR=$env:WX_ROOT" "-DwxWidgets_LIB_DIR=$env:WX_ROOT\lib\vc_x64_dll" "-DCMAKE_PREFIX_PATH=$env:CURL_ROOT" -DwxWidgets_USE_REL_AND_DBG=OFF -DMMEX_PORTABLE_INSTALL=OFF
+          if ($LASTEXITCODE -ne 0) { throw "MMEX Windows configuration failed" }
+          # Build all default targets, including generated themes, reports and translations.
+          # CPack installs these assets in addition to the mmex executable.
+          & cmake --build build-win --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw "MMEX Windows compilation failed" }
+
+      - name: Package installer (NSIS) and portable ZIP
+        shell: pwsh
+        run: |
+          & cpack -G NSIS -C Release --config build-win/CPackConfig.cmake -B build-win
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer packaging failed" }
+          # Add the portable-mode marker only to the ZIP, never to the installer.
+          & cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 -T "v143,host=x64" "-DwxWidgets_ROOT_DIR=$env:WX_ROOT" "-DwxWidgets_LIB_DIR=$env:WX_ROOT\lib\vc_x64_dll" "-DCMAKE_PREFIX_PATH=$env:CURL_ROOT" -DwxWidgets_USE_REL_AND_DBG=OFF -DMMEX_PORTABLE_INSTALL=ON
+          if ($LASTEXITCODE -ne 0) { throw "Portable package configuration failed" }
+          & cpack -G ZIP -C Release --config build-win/CPackConfig.cmake -B build-win
+          if ($LASTEXITCODE -ne 0) { throw "Windows portable packaging failed" }
+          if (-not (Get-ChildItem build-win -Filter "*.exe" -File)) { throw "Windows installer output is missing" }
+          $archives = @(Get-ChildItem build-win -Filter "*.zip" -File)
+          if ($archives.Count -eq 0) { throw "Windows portable ZIP output is missing" }
+          Add-Type -AssemblyName System.IO.Compression
+          foreach ($archive in $archives) {
+            $zip = [System.IO.Compression.ZipFile]::OpenRead($archive.FullName)
+            try {
+              $curlEntries = @($zip.Entries | Where-Object { $_.FullName -like '*/bin/libcurl.dll' })
+              $exeEntries = @($zip.Entries | Where-Object { $_.FullName -like '*/bin/mmex.exe' })
+              if ($curlEntries.Count -ne 1 -or $exeEntries.Count -ne 1) {
+                throw 'Windows portable archive is missing mmex.exe or libcurl.dll'
+              }
+              Write-Host "Verified portable DLL: $($archive.Name)"
+            } finally {
+              $zip.Dispose()
+            }
+          }
+
+      - name: Upload Windows x64 installer and portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmex-virtual-windows-x64
+          path: |
+            build-win/*.exe
+            build-win/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  prerelease:
+    name: Create GitHub prerelease (tag only)
+    needs: [linux-build, windows-build]
+    if: startsWith(github.ref, 'refs/tags/virtual-v') && github.repository == 'hcraveiro/moneymanagerex'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: mmex-virtual-linux-deb
+          path: dist/linux
+
+      - name: Download verified Windows x64 build
+        uses: actions/download-artifact@v4
+        with:
+          name: mmex-virtual-windows-x64
+          path: dist/windows
+
+      - name: Publish opt-in prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            dist/linux/*.deb
+            dist/windows/*.exe
+            dist/windows/*.zip
+          fail_on_unmatched_files: true

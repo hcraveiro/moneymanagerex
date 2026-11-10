@@ -765,13 +765,23 @@ elseif(WIN32)
         DESTINATION "${MMEX_RES_DIR}")
 endif()
 
-# libcurl for Windows, if specified and exists then copy to bin
-if(CMAKE_PREFIX_PATH)
-    file(TO_CMAKE_PATH "${CMAKE_PREFIX_PATH}/bin/libcurl.dll" CURL_LIBPATH)
-    if(EXISTS "${CURL_LIBPATH}")
-        install(FILES
-            "${CURL_LIBPATH}"
-            DESTINATION "${MMEX_BIN_DIR}")
+# Windows builds linking against shared libcurl must ship its runtime DLL.
+# Do not silently produce a package that cannot launch on a clean machine.
+if(WIN32 AND CMAKE_PREFIX_PATH)
+    set(MMEX_CURL_DLL_FOUND FALSE)
+    foreach(MMEX_CURL_PREFIX IN LISTS CMAKE_PREFIX_PATH)
+        file(TO_CMAKE_PATH "${MMEX_CURL_PREFIX}/bin/libcurl.dll" MMEX_CURL_DLL_PATH)
+        if(EXISTS "${MMEX_CURL_DLL_PATH}")
+            install(FILES
+                "${MMEX_CURL_DLL_PATH}"
+                DESTINATION "${MMEX_BIN_DIR}")
+            set(MMEX_CURL_DLL_FOUND TRUE)
+            break()
+        endif()
+    endforeach()
+    if(NOT MMEX_CURL_DLL_FOUND)
+        message(FATAL_ERROR
+            "Windows packaging requires libcurl.dll in the dependency prefix's bin directory")
     endif()
 endif()
 

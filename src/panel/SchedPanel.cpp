@@ -315,7 +315,8 @@ wxString SchedPanel::getItem(long item, int col_id)
             : wxString::Format("%i", sched_dx.m_repeat.m_num);
     }
     case SchedList::LIST_ID_AUTO: {
-        return wxGetTranslation(sched_dx.m_repeat.m_mode.name());
+        return sched_dx.is_virtual() ? _t("Virtual")
+            : wxGetTranslation(sched_dx.m_repeat.m_mode.name());
     }
     case SchedList::LIST_ID_REMAINING:
         return getRemainingDays(sched_dx);
@@ -335,6 +336,9 @@ wxString SchedPanel::getItem(long item, int col_id)
 
 const wxString SchedPanel::getRemainingDays(SchedData& sched_d)
 {
+    if (sched_d.is_virtual())
+        return _t("Forecast only");
+
     mmDate pay_date = sched_d.m_date();
     int pay_days = pay_date.daysSince(m_today);
     int due_days = sched_d.m_due_date.daysSince(m_today);
@@ -360,6 +364,12 @@ const wxString SchedPanel::getRemainingDays(SchedData& sched_d)
 void SchedPanel::updateBottomPanelData(int selIndex)
 {
     enableEditDeleteButtons(selIndex >= 0);
+    const bool can_enter = selIndex >= 0 && !m_sched_xa[selIndex].is_virtual();
+    for (wxWindowID button_id : { wxID_PASTE, wxID_IGNORE }) {
+        wxButton* button = static_cast<wxButton*>(FindWindow(button_id));
+        if (button)
+            button->Enable(can_enter);
+    }
     if (selIndex != -1) {
         w_mini_text->SetLabelText(CategoryModel::instance().get_id_fullname(
             m_sched_xa[selIndex].m_category_id_n

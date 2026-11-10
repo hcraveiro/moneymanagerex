@@ -1,0 +1,139 @@
+// Exact minor-unit allocations for virtual recurring cash-flow forecasts.
+#pragma once
+
+#include <algorithm>
+#include <cstdint>
+#include <map>
+#include <stdexcept>
+#include <vector>
+
+namespace virtual_recurring
+{
+struct Allocation
+{
+    int day_offset;              // Zero-based day when the forecast is displayed.
+    std::int64_t minor_units;    // Signed amount in the account currency's minor units.
+};
+
+// A forecast starts on the later of the day after today and the day after
+// activation. Indices are relative to the previous nominal due date.
+constexpr int first_forecast_day(int previous_due_day, int today_day, int activation_day)
+{
+    return std::max(0, std::max(today_day, activation_day) - previous_due_day);
+}
+
+// Distribute all remainder units across the period instead of using a
+// large correction at its end. Integer division truncates toward zero,
+// preserving the same behavior for withdrawals and deposits.
+constexpr std::int64_t amount_for_day(
+    std::int64_t total_minor_units, int cycle_days, int day_offset
+)
+{
+    return cycle_days <= 0 || day_offset < 0 || day_offset >= cycle_days
+        ? 0
+        : total_minor_units / cycle_days
+        + ((day_offset + 1) * (total_minor_units % cycle_days)) / cycle_days
+        - (day_offset * (total_minor_units % cycle_days)) / cycle_days;
+}
+
+// End of the seven-day block measured backward from the nominal due date.
+// For a 30-day period, block endpoints are days 2, 9, 16, 23 and 30.
+constexpr int weekly_bucket_end(int day_offset, int cycle_days)
+{
+    return cycle_days - 1 - (cycle_days - 1 - day_offset) / 7 * 7;
+}
+
+// bucket_end determines where each future day's allocation appears in the
+// report. For daily forecasts use day_offset, for weekly use weekly_bucket_end,
+// and for calendar months/quarters the caller supplies calendar-aware ends.
+// first_future_day excludes today and all earlier days.
+template<typename BucketEnd>
+std::vector<Allocation> allocate(
+    std::int64_t total_minor_units,
+    int cycle_days,
+    int first_future_day,
+    int last_future_day,
+    BucketEnd bucket_end
+)
+{
+    std::vector<Allocation> result;
+    if (cycle_days <= 0 || first_future_day >= cycle_days || last_future_day < 0)
+        return result;
+
+    std::map<int, std::int64_t> totals;
+    const int start = first_future_day < 0 ? 0 : first_future_day;
+    const int last = last_future_day < cycle_days ? last_future_day : cycle_days - 1;
+    for (int day = start; day <= last; ++day) {
+        const int end = bucket_end(day, cycle_days);
+        if (end < day || end >= cycle_days)
+            throw std::invalid_argument("Forecast bucket must end inside the cycle");
+        totals[std::min(end, last)] += amount_for_day(total_minor_units, cycle_days, day);
+    }
+
+    for (const auto& entry : totals) {
+        if (entry.second != 0)
+            result.push_back({ entry.first, entry.second });
+    }
+    return result;
+}
+
+// Entire remaining nominal cycle (no explicit report-horizon clipping).
+template<typename BucketEnd>
+std::vector<Allocation> allocate(
+    std::int64_t total_minor_units,
+    int cycle_days,
+    int first_future_day,
+    BucketEnd bucket_end
+)
+{
+    return allocate(
+        total_minor_units, cycle_days, first_future_day, cycle_days - 1, bucket_end
+    );
+}
+
+
+// Allocate one equal minor-unit share to each calendar bucket, rather than
+// weighting months or quarters by their unequal number of days. Within an
+// incomplete bucket, prorate only the future days against that bucket's
+// actual duration. Preserve signed cents exactly over the complete cycle.
+inline std::vector<Allocation> allocate_equal_calendar_buckets(
+    std::int64_t total_minor_units,
+    int cycle_days,
+    int first_future_day,
+    int last_future_day,
+    const std::vector<int>& bucket_ends
+)
+{
+    std::vector<Allocation> result;
+    if (cycle_days <= 0 || bucket_ends.empty()
+        || first_future_day >= cycle_days || last_future_day < 0)
+        return result;
+
+    const int first = std::max(0, first_future_day);
+    const int last = std::min(cycle_days - 1, last_future_day);
+    if (first > last || bucket_ends.back() != cycle_days - 1)
+        return result;
+
+    int bucket_start = 0;
+    const int bucket_count = static_cast<int>(bucket_ends.size());
+    for (int bucket = 0; bucket < bucket_count; ++bucket) {
+        const int bucket_end = bucket_ends[bucket];
+        if (bucket_end < bucket_start || bucket_end >= cycle_days)
+            throw std::invalid_argument("Invalid calendar bucket boundaries");
+        const int length = bucket_end - bucket_start + 1;
+        const auto share = amount_for_day(total_minor_units, bucket_count, bucket);
+        const int begin = std::max(bucket_start, first);
+        const int finish = std::min(bucket_end, last);
+        if (begin <= finish) {
+            std::int64_t remaining = 0;
+            for (int day = begin; day <= finish; ++day)
+                remaining += amount_for_day(share, length, day - bucket_start);
+            if (remaining != 0)
+                result.push_back({ std::min(bucket_end, last), remaining });
+        }
+        bucket_start = bucket_end + 1;
+    }
+    return result;
+}
+
+} // namespace virtual_recurring

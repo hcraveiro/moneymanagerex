@@ -17,7 +17,7 @@
 #include <vector>
 #include <wx/string.h>
 
-const int dbLatestVersion = 21;
+const int dbLatestVersion = 22;
 
 const std::vector<wxString> dbUpgradeQuery =
 {
@@ -446,6 +446,16 @@ const std::vector<wxString> dbUpgradeQuery =
         -- Fix currency format for Hungarian Forint #6128
         UPDATE CURRENCYFORMATS_V1 SET SFX_SYMBOL=PFX_SYMBOL, PFX_SYMBOL=""  WHERE CURRENCY_SYMBOL="HUF" AND SFX_SYMBOL="";
         
+    )",
+    // Upgrade to version 22
+    R"(
+        -- Virtual recurring transactions are forecast-only schedules.
+        -- The values for VIRTUALFREQUENCY are Daily, Weekly, Monthly and Quarterly.
+        -- Existing schedules remain non-virtual after upgrade.
+        ALTER TABLE BILLSDEPOSITS_V1 ADD COLUMN ISVIRTUAL INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE BILLSDEPOSITS_V1 ADD COLUMN VIRTUALFREQUENCY TEXT DEFAULT NULL;
+        -- Local activation date of forecast-only scheduling.
+        ALTER TABLE BILLSDEPOSITS_V1 ADD COLUMN VIRTUALSTARTDATE TEXT DEFAULT NULL;
     )",
 
 };

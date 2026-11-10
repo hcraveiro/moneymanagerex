@@ -44,6 +44,9 @@ struct SchedCol
         COL_ID_NEXTOCCURRENCEDATE,
         COL_ID_NUMOCCURRENCES,
         COL_ID_COLOR,
+        COL_ID_ISVIRTUAL,
+        COL_ID_VIRTUALFREQUENCY,
+        COL_ID_VIRTUALSTARTDATE,
         COL_ID_size
     };
 
@@ -72,6 +75,10 @@ struct SchedCol
     static const wxString NAME_NEXTOCCURRENCEDATE;
     static const wxString NAME_NUMOCCURRENCES;
     static const wxString NAME_COLOR;
+
+    static const wxString NAME_ISVIRTUAL;
+    static const wxString NAME_VIRTUALFREQUENCY;
+    static const wxString NAME_VIRTUALSTARTDATE;
 
     // convenience methods
 
@@ -141,6 +148,18 @@ struct SchedCol
 
     static TableClauseV<int64> WHERE_COLOR(OP op, const int64& value) {
         return TableClause::WHERE<int64>(NAME_COLOR, op, value);
+    }
+
+    static TableClauseV<int64> WHERE_ISVIRTUAL(OP op, const int64& value) {
+        return TableClause::WHERE<int64>(NAME_ISVIRTUAL, op, value);
+    }
+
+    static TableClauseV<wxString> WHERE_VIRTUALFREQUENCY(OP op, const wxString& value) {
+        return TableClause::WHERE<wxString>(NAME_VIRTUALFREQUENCY, op, value);
+    }
+
+    static TableClauseV<wxString> WHERE_VIRTUALSTARTDATE(OP op, const wxString& value) {
+        return TableClause::WHERE<wxString>(NAME_VIRTUALSTARTDATE, op, value);
     }
 
     // deprecated
@@ -280,6 +299,30 @@ struct SchedCol
         explicit COLOR(const int64 &v): TableOpV<int64>(OP_EQ, v) {}
         explicit COLOR(OP op, const int64 &v): TableOpV<int64>(op, v) {}
     };
+
+    struct ISVIRTUAL : public TableOpV<int64>
+    {
+        static COL_ID col_id() { return COL_ID_ISVIRTUAL; }
+        static wxString col_name() { return s_col_name_a[COL_ID_ISVIRTUAL]; }
+        explicit ISVIRTUAL(const int64 &v): TableOpV<int64>(OP_EQ, v) {}
+        explicit ISVIRTUAL(OP op, const int64 &v): TableOpV<int64>(op, v) {}
+    };
+
+    struct VIRTUALFREQUENCY : public TableOpV<wxString>
+    {
+        static COL_ID col_id() { return COL_ID_VIRTUALFREQUENCY; }
+        static wxString col_name() { return s_col_name_a[COL_ID_VIRTUALFREQUENCY]; }
+        explicit VIRTUALFREQUENCY(const wxString &v): TableOpV<wxString>(OP_EQ, v) {}
+        explicit VIRTUALFREQUENCY(OP op, const wxString &v): TableOpV<wxString>(op, v) {}
+    };
+
+    struct VIRTUALSTARTDATE : public TableOpV<wxString>
+    {
+        static COL_ID col_id() { return COL_ID_VIRTUALSTARTDATE; }
+        static wxString col_name() { return s_col_name_a[COL_ID_VIRTUALSTARTDATE]; }
+        explicit VIRTUALSTARTDATE(const wxString &v): TableOpV<wxString>(OP_EQ, v) {}
+        explicit VIRTUALSTARTDATE(OP op, const wxString &v): TableOpV<wxString>(op, v) {}
+    };
 };
 
 // A single record in database table BILLSDEPOSITS_V1
@@ -304,6 +347,9 @@ struct SchedRow
     wxString NEXTOCCURRENCEDATE;
     int64 NUMOCCURRENCES;
     int64 COLOR;
+    int64 ISVIRTUAL;
+    wxString VIRTUALFREQUENCY;
+    wxString VIRTUALSTARTDATE;
 
     explicit SchedRow();
     explicit SchedRow(wxSQLite3ResultSet& q);
@@ -416,6 +462,21 @@ struct SchedRow
     bool match(const Col::COLOR& col)
     {
         return COLOR == col.m_value;
+    }
+
+    bool match(const Col::ISVIRTUAL& col)
+    {
+        return ISVIRTUAL == col.m_value;
+    }
+
+    bool match(const Col::VIRTUALFREQUENCY& col)
+    {
+        return VIRTUALFREQUENCY.CmpNoCase(col.m_value) == 0;
+    }
+
+    bool match(const Col::VIRTUALSTARTDATE& col)
+    {
+        return VIRTUALSTARTDATE.CmpNoCase(col.m_value) == 0;
     }
 
     template<typename Arg1, typename... Args>
@@ -557,6 +618,30 @@ struct SchedRow
         bool operator()(const SchedRow& x, const SchedRow& y)
         {
             return x.COLOR < y.COLOR;
+        }
+    };
+
+    struct SorterByISVIRTUAL
+    {
+        bool operator()(const SchedRow& x, const SchedRow& y)
+        {
+            return x.ISVIRTUAL < y.ISVIRTUAL;
+        }
+    };
+
+    struct SorterByVIRTUALFREQUENCY
+    {
+        bool operator()(const SchedRow& x, const SchedRow& y)
+        {
+            return x.VIRTUALFREQUENCY < y.VIRTUALFREQUENCY;
+        }
+    };
+
+    struct SorterByVIRTUALSTARTDATE
+    {
+        bool operator()(const SchedRow& x, const SchedRow& y)
+        {
+            return x.VIRTUALSTARTDATE < y.VIRTUALSTARTDATE;
         }
     };
 };

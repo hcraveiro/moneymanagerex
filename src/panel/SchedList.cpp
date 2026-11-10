@@ -199,8 +199,9 @@ void SchedList::OnItemRightClick(wxMouseEvent& event)
     menu.AppendSeparator();
     menu.Append(MENU_TREEPOPUP_ORGANIZE_ATTACHMENTS, _tu("&Organize Attachments…"));
 
-    menu.Enable(MENU_POPUP_BD_ENTER_OCCUR, item_active);
-    menu.Enable(MENU_POPUP_BD_SKIP_OCCUR, item_active);
+    const bool can_enter = item_active && !w_panel->m_sched_xa[m_select_n].is_virtual();
+    menu.Enable(MENU_POPUP_BD_ENTER_OCCUR, can_enter);
+    menu.Enable(MENU_POPUP_BD_SKIP_OCCUR, can_enter);
     menu.Enable(MENU_TREEPOPUP_EDIT, item_active);
     menu.Enable(MENU_TREEPOPUP_DUPLICATE, item_active);
     menu.Enable(MENU_TREEPOPUP_DELETE, item_active);
@@ -236,6 +237,9 @@ int SchedList::OnGetItemImage(long item) const
 {
     SchedData& sched_d = w_panel->m_sched_xa[item];
     int due_days = sched_d.m_due_date.daysSince(w_panel->m_today);
+
+    if (sched_d.is_virtual())
+        return -1;
 
     // Returns the icon to be shown for each entry
     if (due_days < 0)
@@ -314,7 +318,16 @@ void SchedList::onEnterBDTransaction(wxCommandEvent& /*event*/)
     if (m_select_n == -1)
         return;
 
-    int64 sched_id = w_panel->m_sched_xa[m_select_n].m_id;
+    const SchedData& selected = w_panel->m_sched_xa[m_select_n];
+    if (selected.is_virtual()) {
+        wxMessageBox(
+            _t("Virtual recurring transactions cannot be entered as real transactions."),
+            _t("Virtual recurring transaction"), wxOK | wxICON_WARNING, this
+        );
+        return;
+    }
+
+    int64 sched_id = selected.m_id;
     SchedDialog dlg(this, SchedDialog::MODE_ENTER, sched_id);
     if (dlg.ShowModal() == wxID_OK ) {
         if (++m_select_n < long(w_panel->m_sched_xa.size()))
@@ -326,6 +339,10 @@ void SchedList::onEnterBDTransaction(wxCommandEvent& /*event*/)
 void SchedList::onSkipBDTransaction(wxCommandEvent& /*event*/)
 {
     if (m_select_n == -1)
+        return;
+
+    // Virtual schedules advance only in forecast memory, never in the database.
+    if (w_panel->m_sched_xa[m_select_n].is_virtual())
         return;
 
     int64 sched_id = w_panel->m_sched_xa[m_select_n].m_id;
