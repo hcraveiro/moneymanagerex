@@ -75,6 +75,19 @@ int main()
         assert(november_eight[i].minor_units == 700);
     }
 
+    // A monthly schedule advancing Jan 30 -> Feb 28 has 29 days.
+    // The day Jan 31 must not disappear when February is shorter.
+    // Due-anchored weekly blocks are Jan 31, Feb 7/14/21/28.
+    const auto february_boundary = allocate(3000, 29, 0, weekly);
+    assert(february_boundary.size() == 5);
+    const int february_offsets[] = {0, 7, 14, 21, 28};
+    const std::int64_t february_cents[] = {103, 724, 724, 724, 725};
+    for (size_t i = 0; i < february_boundary.size(); ++i) {
+        assert(february_boundary[i].day_offset == february_offsets[i]);
+        assert(february_boundary[i].minor_units == february_cents[i]);
+    }
+    assert(sum(february_boundary) == 3000);
+
     // Activated on November 25: only November 26-30 must be forecast.
     const int activated_mid_cycle = first_forecast_day(0, 20, 25);
     const auto activated_daily = allocate(3000, 30, activated_mid_cycle, daily);
