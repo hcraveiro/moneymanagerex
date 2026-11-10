@@ -272,15 +272,23 @@ void FlowReport::getTransactions()
 
             // Work on a local Repeat copy. Catching up past due dates must never
             // mutate Next Occurrence or Payments Left in the database.
+            // Keep the actual preceding occurrence while skipping and while
+            // iterating future cycles. Reverse month arithmetic is ambiguous
+            // after a short February (Jan 30 -> Feb 28 -> Mar 28).
+            mmDate previous_due = next_date;
             const auto skipped = virtual_recurring::skip_elapsed(
                 next_date, repeat, mmDate(m_today),
-                [](Repeat& r, mmDate due) { return r.next_date(due); }
+                [&](Repeat& r, mmDate due) {
+                    previous_due = due;
+                    return r.next_date(due);
+                }
             );
             if (skipped.status != virtual_recurring::SkipStatus::Ready)
                 continue;
+            if (skipped.skipped == 0)
+                previous_due = prior_nominal_due(repeat, next_date);
 
             for (int cycle = 0; cycle < 10000 && repeat.m_num != 0; ++cycle) {
-                mmDate previous_due = prior_nominal_due(repeat, next_date);
                 const int start_day = date_number(previous_due);
                 const int end_day = date_number(next_date);
                 const int cycle_days = end_day - start_day;
@@ -350,6 +358,7 @@ void FlowReport::getTransactions()
                 mmDate advanced = repeat.next_date(next_date);
                 if (!(advanced > next_date))
                     break;
+                previous_due = next_date;
                 next_date = advanced;
                 repeat.next_repeat();
             }
